@@ -1,0 +1,2550 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="screen-orientation" content="any">
+<title>Flight Sim — Mobile</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,sans-serif;user-select:none;touch-action:none;position:fixed;padding:0;margin:0}
+#canvas{display:block;width:100%;height:100%;touch-action:none}
+
+/* ===== HUD ===== */
+#hud{position:absolute;inset:0;pointer-events:none;color:#0f0;text-shadow:0 0 5px #000;font-family:ui-monospace,Consolas,monospace;z-index:10}
+.panel{position:absolute;background:rgba(0,18,0,.72);border:1px solid rgba(0,255,80,.28);padding:5px 8px;border-radius:6px;font-size:11px;line-height:1.25}
+#speed{top:calc(6px + env(safe-area-inset-top, 0px));left:6px}
+#altitude{top:calc(6px + env(safe-area-inset-top, 0px));right:6px;text-align:right}
+#attitude{top:50%;left:50%;transform:translate(-50%,-130%);text-align:center;min-width:120px;font-size:10px}
+#acInfo{bottom:calc(6px + env(safe-area-inset-bottom, 0px));left:6px;font-size:10px}
+#crosshair{position:absolute;top:50%;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:1.5px solid rgba(0,255,0,.6);border-radius:50%}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(0,255,0,.6)}
+#crosshair::before{width:1.5px;height:8px;left:8px;top:5px}
+#crosshair::after{width:8px;height:1.5px;left:5px;top:8px}
+
+#cockpitFrame{position:absolute;inset:0;pointer-events:none;display:none;z-index:5}
+#cockpitFrame .topBar{position:absolute;top:0;left:0;right:0;height:40px;background:linear-gradient(to bottom,rgba(12,16,20,.88),transparent)}
+#cockpitFrame .bottomBar{position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(to top,rgba(8,12,16,.9),transparent)}
+#cockpitFrame .sideL,#cockpitFrame .sideR{position:absolute;top:0;bottom:0;width:36px;background:linear-gradient(to right,rgba(6,10,14,.75),transparent)}
+#cockpitFrame .sideR{right:0;left:auto;background:linear-gradient(to left,rgba(6,10,14,.75),transparent)}
+
+#loading{position:absolute;inset:0;background:#050505;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#0f0;gap:8px;font-size:17px}
+#loading small{color:#6a6;font-size:12px}
+
+#achToast{position:absolute;top:calc(56px + env(safe-area-inset-top, 12px));left:50%;transform:translateX(-50%);background:rgba(0,32,0,.92);border:1px solid #0f0;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;max-width:90vw;text-align:center}
+#achToast.show{opacity:1}
+#crashMsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(60,0,0,.92);border:2px solid #f44;color:#f88;padding:14px 22px;border-radius:10px;font-size:16px;display:none;z-index:50;text-align:center}
+
+/* ===== TOP MENU ===== */
+#menu{position:absolute;top:calc(8px + env(safe-area-inset-top, 12px));left:50%;transform:translateX(-50%);background:rgba(0,16,0,.88);border:1px solid #0f04;padding:5px 8px;border-radius:8px;color:#0f0;font-size:10px;pointer-events:auto;z-index:20;display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:94vw}
+#menu button{background:#0a320a;border:1px solid #0f0;color:#0f0;padding:6px 9px;border-radius:5px;font-size:11px;min-height:34px;min-width:38px}
+#menu button:active,#menu button.active{background:#0f0;color:#000}
+#menu label{display:flex;align-items:center;gap:3px;font-size:9px}
+#menu input[type=range]{width:60px;accent-color:#0f0;height:16px}
+
+#achList{position:absolute;top:calc(48px + env(safe-area-inset-top, 12px));right:4px;width:min(220px,80vw);max-height:30vh;overflow-y:auto;background:rgba(0,10,0,.92);border:1px solid #0f04;border-radius:8px;padding:6px;color:#8f8;font-size:10px;display:none;z-index:25;pointer-events:auto}
+#achList h3{color:#0f0;margin-bottom:4px;font-size:12px}
+#achList .ach{margin:2px 0;padding:2px 0;border-bottom:1px solid #0f02}
+#achList .done{color:#0f0}
+
+/* ===== TOUCH UI — base ===== */
+#touchUI{position:absolute;inset:0;pointer-events:none;z-index:15;display:none}
+#touchUI.show{display:block}
+
+.stickZone{position:absolute;pointer-events:auto;touch-action:none}
+.stickBase{position:absolute;inset:0;border-radius:50%;background:rgba(0,35,0,.4);border:2px solid rgba(0,255,100,.4)}
+.stickKnob{position:absolute;width:38%;height:38%;left:31%;top:31%;border-radius:50%;background:rgba(0,210,70,.6);border:2px solid rgba(0,255,120,.75);pointer-events:none}
+
+#thrBar{position:absolute;pointer-events:auto;touch-action:none;background:rgba(0,28,0,.5);border:2px solid rgba(0,255,80,.4);border-radius:10px}
+#thrFill{position:absolute;bottom:0;left:0;right:0;height:40%;background:rgba(0,190,55,.6);border-radius:0 0 8px 8px;pointer-events:none}
+#thrLabel{position:absolute;font-size:9px;color:#0f0;text-shadow:0 0 3px #000;white-space:nowrap}
+
+#btnRow{position:absolute;display:flex;gap:6px;pointer-events:auto}
+#btnRow button{width:44px;height:44px;border-radius:50%;background:rgba(0,35,0,.6);border:2px solid rgba(0,255,80,.45);color:#0f0;font-size:10px;font-weight:700}
+
+/* ========== LANDSCAPE (horizontal) ========== */
+@media (orientation: landscape){
+  #stickL{left:10px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));width:min(28vw,150px);height:min(28vw,150px)}
+  #stickR{right:10px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));width:min(28vw,150px);height:min(28vw,150px)}
+  #thrBar{right:10px;bottom:calc(12px + env(safe-area-inset-bottom, 0px) + min(28vw,150px) + 8px);width:32px;height:min(22vh,90px)}
+  #thrLabel{top:-16px;left:50%;transform:translateX(-50%)}
+  #btnRow{bottom:calc(12px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%)}
+  #btnRow button{width:42px;height:42px;font-size:10px}
+  #attitude{transform:translate(-50%,-140%)}
+  #acInfo{bottom:6px;left:6px}
+  /* keep menu compact */
+  #menu{top:calc(6px + env(safe-area-inset-top, 8px));padding:4px 6px}
+}
+
+/* ========== PORTRAIT (vertical) ========== */
+@media (orientation: portrait){
+  #stickL{left:8px;bottom:calc(18% + env(safe-area-inset-bottom, 0px));width:min(36vw,140px);height:min(36vw,140px)}
+  #stickR{right:8px;bottom:calc(18% + env(safe-area-inset-bottom, 0px));width:min(36vw,140px);height:min(36vw,140px)}
+  #thrBar{left:50%;transform:translateX(-50%);bottom:calc(18% + env(safe-area-inset-bottom, 0px) + min(36vw,140px) + 12px);width:min(50vw,160px);height:28px}
+  #thrFill{height:100% !important;width:40%;bottom:0;left:0;right:auto;border-radius:8px 0 0 8px}
+  #thrLabel{top:50%;left:-28px;transform:translateY(-50%)}
+  #btnRow{bottom:calc(10px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%);gap:8px}
+  #btnRow button{width:48px;height:48px;font-size:11px}
+  #attitude{top:42%;transform:translate(-50%,-50%)}
+  #acInfo{bottom:auto;top:calc(44px + env(safe-area-inset-top, 12px));left:6px;font-size:9px}
+  #speed{top:calc(6px + env(safe-area-inset-top, 0px));left:6px}
+  #altitude{top:calc(6px + env(safe-area-inset-top, 0px));right:6px}
+  #menu{top:calc(8px + env(safe-area-inset-top, 12px));max-width:94vw}
+  /* portrait throttle is horizontal */
+  #thrBar.portrait-h{/* handled via JS class if needed */}
+}
+
+/* Desktop: hide touch */
+@media (hover:hover) and (pointer:fine){
+  #touchUI{display:none !important}
+  .panel{font-size:13px;padding:8px 12px}
+  #speed{top:14px;left:14px}
+  #altitude{top:14px;right:14px}
+  #acInfo{bottom:14px;left:14px;font-size:12px}
+  #helpDesk{display:block !important}
+}
+
+#helpDesk{display:none;position:absolute;bottom:10px;right:10px;text-align:right;color:#8f8;font-size:11px;max-width:230px;background:rgba(0,18,0,.65);border:1px solid rgba(0,255,80,.2);padding:6px 10px;border-radius:6px;pointer-events:none}
+
+/* small landscape phones */
+@media (orientation:landscape) and (max-height:420px){
+  #stickL,#stickR{width:min(24vw,120px);height:min(24vw,120px);bottom:6px}
+  #thrBar{bottom:calc(6px + min(24vw,120px) + 4px);height:70px;width:28px}
+  #btnRow{bottom:6px}
+  #btnRow button{width:36px;height:36px;font-size:9px}
+  #menu{top:calc(4px + env(safe-area-inset-top, 6px))}
+  #attitude{display:none}
+}
+
+#minimap{
+  position:absolute; z-index:18; pointer-events:none;
+  border:2px solid rgba(0,255,80,.45); border-radius:8px;
+  background:rgba(0,20,0,.75); overflow:hidden;
+  width:112px; height:112px;
+  right:calc(6px + env(safe-area-inset-right, 0px));
+  top:calc(52px + env(safe-area-inset-top, 12px));
+}
+#minimap canvas{display:block;width:100%;height:100%}
+@media (orientation:landscape){
+  #minimap{width:100px;height:100px; top:calc(44px + env(safe-area-inset-top, 8px)); right:6px}
+}
+@media (orientation:portrait){
+  #minimap{width:96px;height:96px; top:calc(88px + env(safe-area-inset-top, 12px)); right:6px}
+}
+@media (hover:hover) and (pointer:fine){
+  #minimap{width:140px;height:140px; top:auto; bottom:14px; right:14px}
+}
+
+#gpCal{
+  display:none; position:absolute; z-index:60; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(420px,94vw); max-height:85vh; overflow-y:auto;
+  background:rgba(0,18,0,.95); border:2px solid #0f0; border-radius:12px;
+  padding:12px 14px; color:#0f0; font-family:ui-monospace,monospace; font-size:12px;
+  pointer-events:auto;
+}
+#gpCal h3{margin:0 0 8px; font-size:15px; text-align:center}
+#gpCal .hint{color:#8f8; font-size:11px; margin-bottom:10px; text-align:center; line-height:1.35}
+#gpCal .axisRow{display:flex; align-items:center; gap:6px; margin:4px 0}
+#gpCal .axisName{width:28px; color:#8f8}
+#gpCal .barBg{flex:1; height:12px; background:#033; border-radius:4px; overflow:hidden; position:relative}
+#gpCal .barFill{height:100%; width:50%; background:#0c0; border-radius:4px}
+#gpCal .barCenter{position:absolute; left:50%; top:0; bottom:0; width:2px; background:#0f06}
+#gpCal .axisVal{width:42px; text-align:right; font-size:10px}
+#gpCal .mapRow{display:flex; align-items:center; gap:6px; margin:6px 0; flex-wrap:wrap}
+#gpCal .mapRow label{width:70px}
+#gpCal select{background:#0a2a0a; color:#0f0; border:1px solid #0f0; border-radius:4px; padding:3px; font-size:11px}
+#gpCal .chk{display:flex; align-items:center; gap:3px; font-size:11px}
+#gpCal .btns{display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap}
+#gpCal .btns button{background:#0a320a; border:1px solid #0f0; color:#0f0; padding:8px 14px; border-radius:6px; font-size:12px; min-height:36px}
+#gpCal .btns button.primary{background:#0f0; color:#000; font-weight:700}
+#gpToast{position:absolute; top:calc(70px + env(safe-area-inset-top,12px)); left:50%; transform:translateX(-50%);
+  background:rgba(0,40,0,.95); border:1px solid #0f0; color:#0f0; padding:8px 12px; border-radius:8px;
+  z-index:55; font-size:12px; display:none; max-width:90vw; text-align:center; pointer-events:auto}
+#gpToast button{margin-left:8px; background:#0f0; color:#000; border:none; padding:4px 8px; border-radius:4px; font-size:11px}
+
+
+#stallWarn{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);color:#f44;font-size:18px;font-weight:700;
+  text-shadow:0 0 12px #f00;opacity:0;pointer-events:none;z-index:30;letter-spacing:2px;transition:opacity .1s}
+#stallWarn.show{opacity:1}
+#landScore{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);background:rgba(0,30,0,.92);border:1px solid #0f0;
+  color:#0f0;padding:14px 20px;border-radius:10px;z-index:45;display:none;text-align:center;font-size:14px;pointer-events:none}
+#startScreen{position:absolute;inset:0;z-index:90;background:radial-gradient(ellipse at center,#0a1a12 0%,#020805 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;color:#0f0;font-family:system-ui,sans-serif;text-align:center;padding:20px}
+#startScreen h1{font-size:clamp(22px,5vw,36px);margin:0 0 6px;letter-spacing:3px;text-shadow:0 0 20px #0f05}
+#startScreen .sub{color:#6a6;font-size:13px;margin-bottom:18px}
+#startScreen .feats{font-size:12px;color:#8f8;line-height:1.6;max-width:420px;margin:0 auto 20px;text-align:left}
+#startScreen button#btnStart{background:#0f0;color:#000;border:none;padding:14px 36px;font-size:16px;font-weight:700;
+  border-radius:10px;cursor:pointer;min-height:48px}
+#startScreen button#btnStart:active{transform:scale(0.97)}
+#startScreen .ver{margin-top:16px;font-size:10px;color:#454}
+
+#gfxPanel{
+  display:none; position:absolute; z-index:65; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(380px,94vw); max-height:85vh; overflow-y:auto;
+  background:rgba(0,16,0,.96); border:2px solid #0f0; border-radius:12px;
+  padding:14px 16px; color:#0f0; font-family:ui-monospace,monospace; font-size:12px; pointer-events:auto;
+}
+#gfxPanel h3{margin:0 0 10px; text-align:center; font-size:15px}
+#gfxPanel .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; flex-wrap:wrap}
+#gfxPanel label{flex:1; min-width:100px}
+#gfxPanel select, #gfxPanel input[type=range]{background:#0a2a0a; color:#0f0; border:1px solid #0f04; border-radius:4px; padding:4px; max-width:160px}
+#gfxPanel input[type=range]{width:140px; accent-color:#0f0}
+#gfxPanel .btns{display:flex; gap:8px; justify-content:center; margin-top:14px; flex-wrap:wrap}
+#gfxPanel .btns button{background:#0a320a; border:1px solid #0f0; color:#0f0; padding:8px 14px; border-radius:6px; font-size:12px; min-height:36px}
+#gfxPanel .btns button.primary{background:#0f0; color:#000; font-weight:700}
+#gfxPanel .hint{color:#6a6; font-size:10px; text-align:center; margin-top:6px}
+</style>
+</head>
+<body>
+<div id="loading">Загрузка...<small>портрет + ландшафт</small></div>
+
+<div id="stallWarn">⚠ STALL</div>
+<div id="landScore"></div>
+<div id="startScreen">
+  <h1>GROK FLIGHT</h1>
+  <div class="sub">Browser AAA-style flight sim · Three.js</div>
+  <div class="feats">
+    • Москва, аэропорт, ИИ-трафик, миникарта<br>
+    • 6 ЛА · пушки · шасси/закрылки · геймпад<br>
+    • Звук двигателя · инверсионный след · сваливание<br>
+    • Оценка посадки · достижения
+  </div>
+  <button type="button" id="btnStart">ВЗЛЕТАТЬ</button>
+  <div class="ver">v1.0 · open source</div>
+</div>
+
+<canvas id="canvas"></canvas>
+<div id="cockpitFrame"><div class="topBar"></div><div class="bottomBar"></div><div class="sideL"></div><div class="sideR"></div></div>
+
+<div id="hud">
+  <div id="crosshair"></div>
+  <div class="panel" id="speed">IAS<br><span id="ias">000</span> kt</div>
+  <div class="panel" id="altitude">ALT<br><span id="alt">0000</span><br>VS <span id="vs">0</span></div>
+  <div class="panel" id="attitude">P <span id="pitch">0.0</span>° · B <span id="bank">0.0</span>°<br>HDG <span id="hdg">000</span>°</div>
+  <div class="panel" id="acInfo"><span id="acName">Cessna</span> · THR <span id="thr">00</span>% · FLP <span id="flaps">0</span> · G <span id="gear">D</span> · S <span id="sensVal">1.0</span></div>
+  <div class="panel" id="helpDesk">W/S газ · A/D рысканье · стрелки · Space огонь · 1-4 ЛА · C/R</div>
+</div>
+
+<div id="achToast"></div>
+<div id="crashMsg">💥 СТОЛКНОВЕНИЕ<br><small>RST или R</small></div>
+
+
+<div id="gfxPanel">
+  <h3>⚙ Графика</h3>
+  <div class="row"><label>Пресет</label>
+    <select id="gfxPreset">
+      <option value="low">Низкие</option>
+      <option value="medium">Средние</option>
+      <option value="high">Высокие</option>
+      <option value="custom">Свои</option>
+    </select>
+  </div>
+  <div class="row"><label>Дальность</label>
+    <input type="range" id="gfxDist" min="1500" max="25000" step="500" value="6000">
+    <span id="gfxDistLab">6 км</span>
+  </div>
+  <div class="row"><label>Разрешение</label>
+    <select id="gfxPixel">
+      <option value="0.75">75%</option>
+      <option value="1">100%</option>
+      <option value="1.25">125%</option>
+      <option value="1.5">150%</option>
+      <option value="2">200%</option>
+    </select>
+  </div>
+  <div class="row"><label>Сглаживание</label>
+    <input type="checkbox" id="gfxAA">
+  </div>
+  <div class="row"><label>Облака</label>
+    <input type="checkbox" id="gfxClouds" checked>
+  </div>
+  <div class="row"><label>Инверсия. след</label>
+    <input type="checkbox" id="gfxTrail" checked>
+  </div>
+  <div class="row"><label>Машины</label>
+    <input type="checkbox" id="gfxCars" checked>
+  </div>
+  <div class="row"><label>ИИ-самолёты</label>
+    <input type="checkbox" id="gfxAI" checked>
+  </div>
+  <div class="row"><label>Туман (гуще = легче)</label>
+    <input type="range" id="gfxFog" min="1" max="20" step="1" value="6">
+    <span id="gfxFogLab">6</span>
+  </div>
+  <div class="btns">
+    <button type="button" class="primary" id="gfxApply">Применить</button>
+    <button type="button" id="gfxClose">Закрыть</button>
+  </div>
+  <div class="hint">Дальность и туман сильнее всего влияют на FPS.<br>Смена пресета «Низкие» — лучший старт для слабого ПК.</div>
+</div>
+
+<div id="gpToast">🎮 Контроллер подключён <button type="button" id="gpToastCal">Калибровка</button></div>
+<div id="gpCal">
+  <h3>Калибровка контроллера</h3>
+  <div class="hint">Двигай стики — смотри оси ниже.<br>Назначь канал для каждого управления и инверсию при необходимости.</div>
+  <div id="gpAxisLive"></div>
+  <hr style="border-color:#0f04;margin:10px 0">
+  <div class="mapRow"><label>Крен</label>
+    <select id="gpAxRoll"></select>
+    <label class="chk"><input type="checkbox" id="gpInvRoll"> инв.</label>
+  </div>
+  <div class="mapRow"><label>Тангаж</label>
+    <select id="gpAxPitch"></select>
+    <label class="chk"><input type="checkbox" id="gpInvPitch"> инв.</label>
+  </div>
+  <div class="mapRow"><label>Рысканье</label>
+    <select id="gpAxYaw"></select>
+    <label class="chk"><input type="checkbox" id="gpInvYaw"> инв.</label>
+  </div>
+  <div class="mapRow"><label>Газ</label>
+    <select id="gpAxThr"></select>
+    <label class="chk"><input type="checkbox" id="gpInvThr"> инв.</label>
+  </div>
+  <div class="mapRow"><label>Режим газа</label>
+    <select id="gpThrMode">
+      <option value="centered">Стик ±1 → 0..1</option>
+      <option value="full">Ось -1..1 как (v+1)/2</option>
+      <option value="raw01">Уже 0..1</option>
+    </select>
+  </div>
+  <div class="hint" id="gpPreview" style="margin-top:8px">—</div>
+  <div class="btns">
+    <button type="button" class="primary" id="gpSave">Сохранить</button>
+    <button type="button" id="gpAuto">Авто (макс. движение)</button>
+    <button type="button" id="gpClose">Закрыть</button>
+  </div>
+</div>
+
+<div id="minimap"><canvas id="mapCanvas" width="140" height="140"></canvas></div>
+
+<div id="menu">
+  <button data-ac="0" class="active">Cessna</button>
+  <button data-ac="1">Jet</button>
+  <button data-ac="2">F-16</button>
+  <button data-ac="3">Airbus</button>
+  <button data-ac="4">Spitfire</button>
+  <button data-ac="5">Heli</button>
+  <label>Sens <input type="range" id="sensSlider" min="0.5" max="4.0" step="0.1" value="1.5"><span id="sensLabel">1.0</span></label>
+  <button id="btnAch">🏆</button>
+  <button id="btnGfx" title="Графика">⚙</button>
+  <button id="btnGpCal" title="Калибровка геймпада">GP</button>
+  <button id="btnReload" title="Перезагрузка">↻</button>
+</div>
+<div id="achList"><h3>Достижения</h3><div id="achContent"></div></div>
+
+<div id="touchUI">
+  <div class="stickZone" id="stickL"><div class="stickBase"><div class="stickKnob" id="knobL"></div></div></div>
+  <div class="stickZone" id="stickR"><div class="stickBase"><div class="stickKnob" id="knobR"></div></div></div>
+  <div id="thrBar"><div id="thrFill"></div><div id="thrLabel">THR</div></div>
+  <div id="btnRow">
+    <button id="tFlaps">FLP</button>
+    <button id="tGear">GEAR</button>
+    <button id="tFire" style="display:none;background:rgba(80,0,0,.7);border-color:#f44;color:#f88">FIRE</button>
+    <button id="tCam">CAM</button>
+    <button id="tReset">RST</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+if(isTouch) document.getElementById('touchUI').classList.add('show');
+// Performance tier: 0=low(mobile), 1=medium, 2=high(desktop)
+var PERF = isTouch ? 0 : 1; // default medium on desktop for stability
+try{
+  var mem = navigator.deviceMemory || 8;
+  var cores = navigator.hardwareConcurrency || 4;
+  if(isTouch && mem>=6 && cores>=6) PERF = 1;
+  if(!isTouch && mem>=8 && cores>=8) PERF = 2;
+}catch(e){}
+var QUALITY = PERF;
+
+// --- Runtime graphics settings ---
+var gfx = {
+  preset: PERF===0?'low':(PERF===1?'medium':'high'),
+  drawDist: PERF===0?4000:(PERF===1?7000:12000),
+  pixelRatio: PERF===0?1:(PERF===1?1.25:1.5),
+  antialias: PERF>=2,
+  clouds: PERF>=1,
+  trails: true,
+  cars: true,
+  ai: true,
+  fogMul: PERF===0?10:(PERF===1?6:4) // higher = denser fog = shorter view
+};
+try{
+  var sg = JSON.parse(localStorage.getItem('fs_gfx')||'null');
+  if(sg && sg.drawDist) Object.assign(gfx, sg);
+}catch(e){}
+
+function fogDensityFromGfx(){
+  // denser fog at higher fogMul; scale with draw distance
+  var base = 1.2 / Math.max(1500, gfx.drawDist);
+  return base * (gfx.fogMul / 4);
+}
+function applyGfxSettings(){
+  try{ localStorage.setItem('fs_gfx', JSON.stringify(gfx)); }catch(e){}
+  if(typeof camera !== 'undefined' && camera){
+    camera.far = Math.max(2000, gfx.drawDist * 1.15);
+    camera.updateProjectionMatrix();
+  }
+  if(typeof scene !== 'undefined' && scene && scene.fog){
+    scene.fog.density = fogDensityFromGfx();
+  }
+  if(typeof renderer !== 'undefined' && renderer){
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gfx.pixelRatio));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+  // clouds visibility
+  if(window.__clouds){
+    for(var i=0;i<window.__clouds.length;i++){
+      window.__clouds[i].mesh.visible = !!gfx.clouds;
+    }
+  }
+  if(window.__cityCars){
+    for(var i=0;i<window.__cityCars.length;i++){
+      window.__cityCars[i].mesh.visible = !!gfx.cars;
+    }
+  }
+  if(window.__aiPlanes){
+    for(var i=0;i<window.__aiPlanes.length;i++){
+      if(window.__aiPlanes[i].phase !== 'done')
+        window.__aiPlanes[i].mesh.visible = !!gfx.ai;
+    }
+  }
+}
+function setGfxPreset(name){
+  gfx.preset = name;
+  if(name==='low'){
+    gfx.drawDist=3500; gfx.pixelRatio=1; gfx.antialias=false;
+    gfx.clouds=false; gfx.trails=false; gfx.cars=false; gfx.ai=true; gfx.fogMul=12;
+  } else if(name==='medium'){
+    gfx.drawDist=7000; gfx.pixelRatio=1.25; gfx.antialias=false;
+    gfx.clouds=true; gfx.trails=true; gfx.cars=true; gfx.ai=true; gfx.fogMul=6;
+  } else if(name==='high'){
+    gfx.drawDist=15000; gfx.pixelRatio=1.75; gfx.antialias=true;
+    gfx.clouds=true; gfx.trails=true; gfx.cars=true; gfx.ai=true; gfx.fogMul=3;
+  }
+  syncGfxUI();
+  applyGfxSettings();
+}
+function syncGfxUI(){
+  var el;
+  if(el=document.getElementById('gfxPreset')) el.value = gfx.preset;
+  if(el=document.getElementById('gfxDist')) el.value = gfx.drawDist;
+  if(el=document.getElementById('gfxDistLab')) el.textContent = (gfx.drawDist/1000).toFixed(1)+' км';
+  if(el=document.getElementById('gfxPixel')) el.value = String(gfx.pixelRatio);
+  if(el=document.getElementById('gfxAA')) el.checked = !!gfx.antialias;
+  if(el=document.getElementById('gfxClouds')) el.checked = !!gfx.clouds;
+  if(el=document.getElementById('gfxTrail')) el.checked = !!gfx.trails;
+  if(el=document.getElementById('gfxCars')) el.checked = !!gfx.cars;
+  if(el=document.getElementById('gfxAI')) el.checked = !!gfx.ai;
+  if(el=document.getElementById('gfxFog')) el.value = gfx.fogMul;
+  if(el=document.getElementById('gfxFogLab')) el.textContent = String(gfx.fogMul);
+}
+function openGfx(){
+  syncGfxUI();
+  document.getElementById('gfxPanel').style.display='block';
+}
+function closeGfx(){ document.getElementById('gfxPanel').style.display='none'; }
+function readGfxUI(){
+  gfx.preset = document.getElementById('gfxPreset').value;
+  gfx.drawDist = +document.getElementById('gfxDist').value;
+  gfx.pixelRatio = parseFloat(document.getElementById('gfxPixel').value);
+  gfx.antialias = document.getElementById('gfxAA').checked;
+  gfx.clouds = document.getElementById('gfxClouds').checked;
+  gfx.trails = document.getElementById('gfxTrail').checked;
+  gfx.cars = document.getElementById('gfxCars').checked;
+  gfx.ai = document.getElementById('gfxAI').checked;
+  gfx.fogMul = +document.getElementById('gfxFog').value;
+}
+
+
+document.addEventListener('gesturestart',function(e){e.preventDefault()});
+document.addEventListener('gesturechange',function(e){e.preventDefault()});
+document.body.addEventListener('touchmove',function(e){
+  if(!e.target.closest('#achList')) e.preventDefault();
+},{passive:false});
+
+// Portrait throttle is horizontal — update fill style on orientation
+function updateThrOrientation(){
+  var bar=document.getElementById('thrBar');
+  var fill=document.getElementById('thrFill');
+  var portrait=window.matchMedia('(orientation: portrait)').matches;
+  if(portrait){
+    fill.style.height='100%';
+    fill.style.width=(state.thrust*100)+'%';
+    fill.style.bottom='0';
+    fill.style.left='0';
+    fill.style.right='auto';
+    fill.style.borderRadius='8px 0 0 8px';
+  } else {
+    fill.style.width='100%';
+    fill.style.height=(state.thrust*100)+'%';
+    fill.style.left='0';
+    fill.style.right='0';
+    fill.style.bottom='0';
+    fill.style.borderRadius='0 0 8px 8px';
+  }
+}
+window.addEventListener('orientationchange',function(){setTimeout(function(){updateThrOrientation(); onResize()},250)});
+window.addEventListener('resize',function(){updateThrOrientation(); onResize()});
+
+// ===== ACHIEVEMENTS =====
+var ACHIEVEMENTS=[
+  {id:'first_flight',name:'Первый полёт',desc:'>100м',check:function(s){return s.position.y>100}},
+  {id:'high_alt',name:'Высотник',desc:'2000м',check:function(s){return s.position.y>2000}},
+  {id:'fast',name:'Скоростник',desc:'300kt',check:function(s){return s.velocity.length()*1.94384>300}},
+  {id:'city',name:'Над городом',desc:'центр',check:function(s){return Math.hypot(s.position.x,s.position.z+1100)<600&&s.position.y<450}},
+  {id:'heli',name:'Вертолётчик',desc:'30с',check:function(s){return s.heliTime>30}},
+  {id:'landing',name:'Посадка',desc:'ВПП',check:function(s){return s.justLanded}},
+  {id:'all_ac',name:'Коллекционер',desc:'все ЛА',check:function(s){return s.usedAircraft.size>=6}},
+  {id:'long',name:'Дальний',desc:'15км',check:function(s){return s.distance>15000}},
+  {id:'crash',name:'Камикадзе',desc:'здание',check:function(s){return s.crashed}}
+];
+var unlocked=[];
+try{unlocked=JSON.parse(localStorage.getItem('fs_ach')||'[]')}catch(e){}
+function unlock(id){
+  if(unlocked.indexOf(id)!==-1)return;
+  unlocked.push(id);
+  try{localStorage.setItem('fs_ach',JSON.stringify(unlocked))}catch(e){}
+  var a=ACHIEVEMENTS.find(function(x){return x.id===id});
+  var t=document.getElementById('achToast');
+  t.textContent='🏆 '+a.name; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show')},2800);
+  renderAchList();
+}
+function renderAchList(){
+  document.getElementById('achContent').innerHTML=ACHIEVEMENTS.map(function(a){
+    var d=unlocked.indexOf(a.id)!==-1;
+    return '<div class="ach '+(d?'done':'')+'">'+(d?'✓':'○')+' '+a.name+'</div>';
+  }).join('');
+}
+renderAchList();
+document.getElementById('btnReload').onclick=function(){ location.reload(); };
+document.getElementById('btnAch').onclick=function(){
+  var l=document.getElementById('achList');
+  l.style.display=l.style.display==='block'?'none':'block';
+};
+
+var AIRCRAFT=[
+  {name:'Cessna 172',mode:'plane',mass:1100,wingArea:16,maxThrust:18000,Cl0:0.3,ClAlpha:5.0,Cd0:0.028,K:0.05,maxRoll:3.8,maxPitch:3.2,maxYaw:2.4,color:0xf5f5f5,accent:0x1a5fb4,bbox:{x:6,y:2.5,z:5}},
+  {name:'Citation Jet',mode:'plane',mass:9000,wingArea:30,maxThrust:140000,Cl0:0.25,ClAlpha:4.5,Cd0:0.022,K:0.04,maxRoll:4.0,maxPitch:3.4,maxYaw:2.2,color:0xe0e0e0,accent:0x333333,bbox:{x:7,y:2.8,z:6}},
+  {name:'F-16 Style',mode:'plane',mass:12000,wingArea:28,maxThrust:280000,Cl0:0.2,ClAlpha:4.2,Cd0:0.02,K:0.035,maxRoll:6.5,maxPitch:5.0,maxYaw:3.5,color:0x6a7a8a,accent:0x222222,bbox:{x:5.5,y:2.2,z:6},armed:true,gunCooldown:0.08,bulletSpeed:420},
+  {name:'Airbus A320',mode:'plane',mass:42000,wingArea:122,maxThrust:240000,Cl0:0.28,ClAlpha:4.8,Cd0:0.024,K:0.038,maxRoll:2.8,maxPitch:2.4,maxYaw:1.8,color:0xf8f8f8,accent:0x0055a4,bbox:{x:14,y:5,z:12}},
+  {name:'Spitfire',mode:'plane',mass:2900,wingArea:22,maxThrust:45000,Cl0:0.32,ClAlpha:5.2,Cd0:0.026,K:0.042,maxRoll:5.5,maxPitch:4.5,maxYaw:3.2,color:0x4a6a3a,accent:0x2a3a1a,bbox:{x:6,y:2.5,z:5},armed:true,gunCooldown:0.1,bulletSpeed:380},
+  {name:'Robinson R22',mode:'heli',mass:650,maxThrust:0,Cl0:0,ClAlpha:0,Cd0:0.04,K:0,maxRoll:3.5,maxPitch:3.0,maxYaw:4.0,color:0xcc3333,accent:0x222222,maxCollective:18000,bbox:{x:5,y:3,z:5}}
+];
+
+var state={
+  position:new THREE.Vector3(0,4.0,650),velocity:new THREE.Vector3(0,0,0),
+  orientation:new THREE.Quaternion(),angularVel:new THREE.Vector3(0,0,0),
+  thrust:0.0,flaps:0,gear:true,gearAnim:1,cameraMode:1,keys:{},acIndex:0,
+  heliTime:0,distance:0,usedAircraft:new Set([0]),justLanded:false,crashed:false,
+  lastPos:new THREE.Vector3(0,4.0,650),sensitivity:1.5,_gearT:false,_camT:false, onGround:true, spawnGrace:2.0,
+  touchPitch:0,touchRoll:0,touchYaw:0,
+  fireHeld:false, gunTimer:0, ammo:999
+};
+var bullets=[]; // {mesh, vel, life}
+
+var canvas=document.getElementById('canvas');
+var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias: !!gfx.antialias, powerPreference:'high-performance', alpha:false});
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, gfx.pixelRatio));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=0.55;
+
+var scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x87a0b8, fogDensityFromGfx());
+scene.background=new THREE.Color(0x87a0b8);
+var camera=new THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight,0.5, Math.max(2000, gfx.drawDist*1.15));
+scene.add(new THREE.HemisphereLight(0x87ceeb,0x3a5a2a,0.65));
+var dir=new THREE.DirectionalLight(0xfff0d0,1.15); dir.position.set(80,180,40); scene.add(dir);
+
+var colliders=[];
+function addCollider(x,y,z,w,h,d){colliders.push({minX:x-w/2,maxX:x+w/2,minY:y,maxY:y+h,minZ:z-d/2,maxZ:z+d/2})}
+function checkCollision(pos,bbox){
+  var hx=bbox.x,hy=bbox.y,hz=bbox.z;
+  for(var i=0;i<colliders.length;i++){
+    var c=colliders[i];
+    // ignore flat ground pads (runway/apron leftovers)
+    if((c.maxY - c.minY) < 5) continue;
+    if(pos.x+hx>c.minX&&pos.x-hx<c.maxX&&pos.y+hy>c.minY&&pos.y-hy<c.maxY&&pos.z+hz>c.minZ&&pos.z-hz<c.maxZ)return true;
+  }
+  return false;
+}
+
+
+// Points of interest for minimap: {x,z,color,label,r}
+var mapPOIs = [];
+
+function createWorld(){
+  var size=36000, seg = PERF===0 ? 64 : (PERF===1 ? 96 : 140);
+  var geo=new THREE.PlaneGeometry(size,size,seg,seg);
+  var pos=geo.attributes.position;
+  for(var i=0;i<pos.count;i++){
+    var x=pos.getX(i), z=pos.getZ(i);
+    var h=Math.sin(x*0.00045)*45+Math.cos(z*0.0004)*40+Math.sin((x+z)*0.0007)*30;
+    h+=Math.sin(x*0.0015)*12+Math.cos(z*0.0012)*10;
+    // flat city basins
+    if(Math.abs(x)<2800 && Math.abs(z+1100)<2000) h*=0.08;
+    if(Math.abs(x-4500)<900 && Math.abs(z+500)<900) h*=0.15;
+    if(Math.abs(x+4200)<800 && Math.abs(z+200)<800) h*=0.15;
+    pos.setY(i, Math.max(h, 0));
+  }
+  geo.computeVertexNormals();
+  var ground=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:0x3a7a34, roughness:0.9}));
+  ground.rotation.x=-Math.PI/2; scene.add(ground);
+  var base=new THREE.Mesh(new THREE.PlaneGeometry(size*1.4, size*1.4), new THREE.MeshBasicMaterial({color:0x2a4a28}));
+  base.rotation.x=-Math.PI/2; base.position.y=-18; scene.add(base);
+
+  // ========== FULL CITY AIRPORT ==========
+  var rwy=new THREE.Group();
+  var aspMat=new THREE.MeshStandardMaterial({color:0x2a2a2a, roughness:0.85});
+  var concMat=new THREE.MeshStandardMaterial({color:0x3a3a3a, roughness:0.9});
+  var whiteL=new THREE.MeshBasicMaterial({color:0xffffff});
+  var yellowL=new THREE.MeshBasicMaterial({color:0xffcc00});
+
+  // Main runway 09/27
+  var asphalt=new THREE.Mesh(new THREE.BoxGeometry(48,0.5,1800), aspMat);
+  asphalt.position.set(0,1.45,0); rwy.add(asphalt);
+  // centerline
+  for(var i=-800;i<800;i+=48){
+    var line=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.55,28), whiteL);
+    line.position.set(0,1.8,i); rwy.add(line);
+  }
+  // threshold bars both ends
+  for(var end=-1; end<=1; end+=2){
+    for(var x=-18;x<=18;x+=6){
+      var thr=new THREE.Mesh(new THREE.BoxGeometry(2.5,0.55,35), whiteL);
+      thr.position.set(x,1.8, end*820); rwy.add(thr);
+    }
+  }
+  // runway edge lights (simple markers)
+  for(var i=-850;i<=850;i+=60){
+    [-24,24].forEach(function(x){
+      var lt=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.5,1.2), new THREE.MeshBasicMaterial({color:0x00ff66}));
+      lt.position.set(x,2.2,i); rwy.add(lt);
+    });
+  }
+
+  // Parallel taxiway
+  var taxiA=new THREE.Mesh(new THREE.BoxGeometry(22,0.4,1700), concMat);
+  taxiA.position.set(90,1.3,0); rwy.add(taxiA);
+  for(var i=-800;i<800;i+=70){
+    var yl=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.5,20), yellowL);
+    yl.position.set(90,1.65,i); rwy.add(yl);
+  }
+  // connectors runway <-> taxi
+  for(var i=-600;i<=600;i+=300){
+    var conn=new THREE.Mesh(new THREE.BoxGeometry(70,0.4,20), concMat);
+    conn.position.set(45,1.3,i); rwy.add(conn);
+  }
+
+  // Apron / ramp
+  var apron=new THREE.Mesh(new THREE.BoxGeometry(320,0.35,500), concMat);
+  apron.position.set(220,1.2,150); rwy.add(apron);
+  // parking stands
+  for(var i=0;i<6;i++){
+    var stand=new THREE.Mesh(new THREE.BoxGeometry(28,0.4,40), new THREE.MeshStandardMaterial({color:0x444444}));
+    stand.position.set(160+i*40,1.35,80+(i%2)*120); rwy.add(stand);
+    // static parked plane silhouettes (simple)
+    var parked=new THREE.Group();
+    var pf=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.3,4.5,8), new THREE.MeshStandardMaterial({color:0xd0d0d0}));
+    pf.rotation.x=Math.PI/2; parked.add(pf);
+    var pw=new THREE.Mesh(new THREE.BoxGeometry(6,0.08,1.2), new THREE.MeshStandardMaterial({color:0xc8c8c8}));
+    pw.position.y=0.2; parked.add(pw);
+    parked.position.set(160+i*40, 3, 80+(i%2)*120);
+    parked.rotation.y = Math.PI/2 + (i%2)*0.2;
+    rwy.add(parked);
+  }
+
+  // Secondary short runway (crosswind)
+  var rwyB=new THREE.Mesh(new THREE.BoxGeometry(32,0.45,900), aspMat);
+  rwyB.position.set(-80,1.4,550); rwyB.rotation.y=Math.PI/2*0.15; rwy.add(rwyB);
+
+  // ===== Terminal buildings =====
+  var glassMat=new THREE.MeshStandardMaterial({color:0x88aacc, roughness:0.2, metalness:0.4, transparent:true, opacity:0.7});
+  var termMat=new THREE.MeshStandardMaterial({color:0xe8e8e8, roughness:0.5});
+
+  // Main terminal
+  var termMain=new THREE.Mesh(new THREE.BoxGeometry(280,28,90), termMat);
+  termMain.position.set(280,15,320); rwy.add(termMain);
+  var termRoof=new THREE.Mesh(new THREE.BoxGeometry(290,4,100), new THREE.MeshStandardMaterial({color:0x4a6a8a}));
+  termRoof.position.set(280,30,320); rwy.add(termRoof);
+  // glass facade
+  var facade=new THREE.Mesh(new THREE.BoxGeometry(260,18,2), glassMat);
+  facade.position.set(280,14,275); rwy.add(facade);
+  // jet bridges
+  for(var i=0;i<5;i++){
+    var bridge=new THREE.Mesh(new THREE.BoxGeometry(8,4,35), new THREE.MeshStandardMaterial({color:0x6a7a8a}));
+    bridge.position.set(180+i*45, 8, 250); rwy.add(bridge);
+  }
+
+  // Second terminal wing
+  var term2=new THREE.Mesh(new THREE.BoxGeometry(120,22,70), termMat);
+  term2.position.set(420,12,280); rwy.add(term2);
+
+  // Control tower
+  var ctwBase=new THREE.Mesh(new THREE.BoxGeometry(22,18,22), termMat);
+  ctwBase.position.set(120,10,380); rwy.add(ctwBase);
+  var ctwShaft=new THREE.Mesh(new THREE.CylinderGeometry(6,8,55,8), new THREE.MeshStandardMaterial({color:0xcccccc}));
+  ctwShaft.position.set(120,45,380); rwy.add(ctwShaft);
+  var ctwCab=new THREE.Mesh(new THREE.CylinderGeometry(12,10,12,8), glassMat);
+  ctwCab.position.set(120,78,380); rwy.add(ctwCab);
+  var ctwTop=new THREE.Mesh(new THREE.CylinderGeometry(3,3,8,6), new THREE.MeshStandardMaterial({color:0x222222}));
+  ctwTop.position.set(120,90,380); rwy.add(ctwTop);
+
+  // Hangars
+  for(var i=0;i<4;i++){
+    var hang=new THREE.Mesh(new THREE.BoxGeometry(55,22,70), new THREE.MeshStandardMaterial({color:0x5a6a5a}));
+    hang.position.set(-180-i*70, 12, 280); rwy.add(hang);
+    addCollider(-180-i*70, 2, 280, 55, 22, 70);
+  }
+  // Cargo terminal
+  var cargo=new THREE.Mesh(new THREE.BoxGeometry(100,18,60), new THREE.MeshStandardMaterial({color:0x6a5a4a}));
+  cargo.position.set(-350,10,100); rwy.add(cargo);
+  addCollider(-350, 2, 100, 100, 18, 60);
+
+  // Fuel farm tanks
+  for(var i=0;i<3;i++){
+    var tank=new THREE.Mesh(new THREE.CylinderGeometry(14,14,22,12), new THREE.MeshStandardMaterial({color:0x888866}));
+    tank.position.set(-280+i*40, 12, -200); rwy.add(tank);
+    addCollider(-280+i*40, 2, -200, 28, 22, 28);
+  }
+
+  // Fire station
+  var fire=new THREE.Mesh(new THREE.BoxGeometry(50,14,35), new THREE.MeshStandardMaterial({color:0xaa3333}));
+  fire.position.set(50,8,420); rwy.add(fire);
+  addCollider(50, 2, 420, 50, 14, 35);
+
+  // Airport road loop
+  var roadLoop=new THREE.Mesh(new THREE.BoxGeometry(18,0.35,600), new THREE.MeshStandardMaterial({color:0x222222}));
+  roadLoop.position.set(380,1.2,100); rwy.add(roadLoop);
+  var roadLoop2=new THREE.Mesh(new THREE.BoxGeometry(500,0.35,18), new THREE.MeshStandardMaterial({color:0x222222}));
+  roadLoop2.position.set(200,1.2,450); rwy.add(roadLoop2);
+
+  // Colliders for main structures
+  // No flat runway/apron colliders — they caused instant crash on spawn
+  addCollider(280, 2, 320, 280, 32, 90);  // terminal
+  addCollider(420, 2, 280, 120, 24, 70);  // terminal wing
+  addCollider(120, 2, 380, 24, 95, 24);   // tower
+
+
+  scene.add(rwy);
+  mapPOIs.push({x:0,z:0,color:'#fff',label:'RWY',r:5});
+  mapPOIs.push({x:280,z:320,color:'#8cf',label:'APT',r:6});
+  mapPOIs.push({x:120,z:380,color:'#ff0',label:'TWR',r:4});
+  mapPOIs.push({x:-250,z:280,color:'#8a8',label:'HANG',r:3});
+
+  // ===== AI DEPARTURE TRAFFIC =====
+  var aiPlanes = [];
+  var aiColors = [0xe8e8e8, 0x3366aa, 0xcc4444, 0xdddddd, 0x2a6a4a, 0xf5f5f5];
+  function makeAIPlane(col){
+    var g = new THREE.Group();
+    var body = new THREE.MeshStandardMaterial({color:col, roughness:0.35, metalness:0.3});
+    var dark = new THREE.MeshStandardMaterial({color:0x222222, roughness:0.5, metalness:0.4});
+    var fus = new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.48,7.5,8), body);
+    fus.rotation.x = Math.PI/2; fus.position.set(0, 0.9, 0); g.add(fus);
+    var nose = new THREE.Mesh(new THREE.ConeGeometry(0.48,1.6,8), body);
+    nose.rotation.x = -Math.PI/2; nose.position.set(0, 0.9, -4.4); g.add(nose);
+    var wing = new THREE.Mesh(new THREE.BoxGeometry(11, 0.12, 1.8), body);
+    wing.position.set(0, 0.85, 0.2); g.add(wing);
+    var engL = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.32,1.8,6), dark);
+    engL.rotation.x = Math.PI/2; engL.position.set(-2.2, 0.4, 0.8); g.add(engL);
+    var engR = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.32,1.8,6), dark);
+    engR.rotation.x = Math.PI/2; engR.position.set(2.2, 0.4, 0.8); g.add(engR);
+    var vstab = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 1.3), body);
+    vstab.position.set(0, 1.8, 3.6); g.add(vstab);
+    var hstab = new THREE.Mesh(new THREE.BoxGeometry(4, 0.08, 1.0), body);
+    hstab.position.set(0, 1.2, 3.6); g.add(hstab);
+    g.scale.setScalar(1.1);
+    return g;
+  }
+  // runway along Z, takeoff toward -Z (heading north-ish of our map: negative Z)
+  var nAI = PERF===0 ? 3 : (PERF===1 ? 4 : 5);
+  for(var ai=0; ai<nAI; ai++){
+    var mesh = makeAIPlane(aiColors[ai % aiColors.length]);
+    scene.add(mesh);
+    aiPlanes.push({
+      mesh: mesh,
+      phase: 'wait',
+      timer: 3 + ai * 8, // staggered starts
+      speed: 0,
+      x: 160 + (ai%3)*40,
+      y: 3.2,
+      z: 80 + (ai%2)*100,
+      hdg: Math.PI/2, // parked facing
+      pitch: 0,
+      alt: 3.2
+    });
+  }
+  window.__aiPlanes = aiPlanes;
+
+  // Blinking runway edge lights + tower beacon (living airport)
+  var airportLights = [];
+  for(var li=-800; li<=800; li+=80){
+    [-26, 26].forEach(function(sx){
+      var bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.6, 6, 6),
+        new THREE.MeshBasicMaterial({color: 0x00ff66})
+      );
+      bulb.position.set(sx, 2.4, li);
+      scene.add(bulb);
+      airportLights.push({mesh:bulb, phase: (li+800)/1600, kind:'edge'});
+    });
+  }
+  // Approach lights toward +Z threshold
+  for(var li=750; li<=950; li+=25){
+    var al = new THREE.Mesh(new THREE.SphereGeometry(0.7,6,6), new THREE.MeshBasicMaterial({color:0xff2222}));
+    al.position.set(0, 2.2, li); scene.add(al);
+    airportLights.push({mesh:al, phase: (li-750)/200, kind:'appr'});
+  }
+  // Tower rotating beacon
+  var beacon = new THREE.PointLight(0xff2222, 1.2, 400);
+  beacon.position.set(120, 95, 380);
+  scene.add(beacon);
+  airportLights.push({mesh:beacon, phase:0, kind:'beacon'});
+  window.__airportLights = airportLights;
+
+
+  var city=new THREE.Group();
+
+  // ========== DETAILED PROCEDURAL CITY (full map) ==========
+  var CITY_SEED = (Date.now() % 100000) | 0;
+  function srand(n){
+    var x = Math.sin(n * 127.1 + CITY_SEED * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  function srand2(a,b){ return srand(a * 12.9898 + b * 78.233); }
+
+  // ---- Canvas textures (Moscow-style facades) ----
+  function makeFacadeTex(kind){
+    var c = document.createElement('canvas');
+    c.width = 128; c.height = 256;
+    var ctx = c.getContext('2d');
+    if(kind === 'panel'){ // хрущёвки / панельки
+      ctx.fillStyle = '#a8a89a'; ctx.fillRect(0,0,128,256);
+      for(var y=4;y<256;y+=18){
+        for(var x=4;x<128;x+=16){
+          ctx.fillStyle = (x+y)%36<18 ? '#c8d0d8' : '#3a4550';
+          ctx.fillRect(x, y, 10, 12);
+        }
+        ctx.strokeStyle = '#888880'; ctx.beginPath(); ctx.moveTo(0,y-2); ctx.lineTo(128,y-2); ctx.stroke();
+      }
+    } else if(kind === 'stalin'){ // сталинки — беж/охра + ряды окон
+      ctx.fillStyle = '#c4a574'; ctx.fillRect(0,0,128,256);
+      for(var y=8;y<250;y+=22){
+        for(var x=6;x<122;x+=18){
+          ctx.fillStyle = '#2a3540';
+          ctx.fillRect(x, y, 11, 14);
+          ctx.fillStyle = 'rgba(255,220,150,0.15)';
+          ctx.fillRect(x+1, y+1, 4, 5);
+        }
+      }
+      ctx.fillStyle = '#8a6a40'; ctx.fillRect(0,0,128,6);
+    } else if(kind === 'brick'){
+      ctx.fillStyle = '#8a4030'; ctx.fillRect(0,0,128,256);
+      for(var y=0;y<256;y+=10){
+        var off = (Math.floor(y/10)%2)*12;
+        for(var x=-12;x<128;x+=24){
+          ctx.fillStyle = '#9a5040';
+          ctx.fillRect(x+off, y, 22, 8);
+          ctx.strokeStyle = '#6a3020'; ctx.strokeRect(x+off, y, 22, 8);
+        }
+      }
+    } else if(kind === 'glass'){
+      ctx.fillStyle = '#1a3048'; ctx.fillRect(0,0,128,256);
+      for(var y=2;y<256;y+=14){
+        for(var x=2;x<128;x+=12){
+          var g = 40 + ((x*y)%80);
+          ctx.fillStyle = 'rgb('+(30+g*0.3)+','+(50+g*0.4)+','+(70+g*0.5)+')';
+          ctx.fillRect(x, y, 9, 11);
+        }
+      }
+    } else if(kind === 'classic'){ // жёлтые московские фасады
+      ctx.fillStyle = '#e8d5a8'; ctx.fillRect(0,0,128,256);
+      for(var y=10;y<248;y+=28){
+        for(var x=8;x<120;x+=20){
+          ctx.fillStyle = '#3a4a5a';
+          ctx.fillRect(x, y, 12, 16);
+          ctx.fillStyle = '#d0c090';
+          ctx.fillRect(x-1, y-2, 14, 3);
+        }
+      }
+    } else { // modern white
+      ctx.fillStyle = '#e0e4e8'; ctx.fillRect(0,0,128,256);
+      for(var y=6;y<250;y+=16){
+        for(var x=4;x<124;x+=14){
+          ctx.fillStyle = '#4a6070';
+          ctx.fillRect(x, y, 9, 11);
+        }
+      }
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 2);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  var texPanel = makeFacadeTex('panel');
+  var texStalin = makeFacadeTex('stalin');
+  var texBrick = makeFacadeTex('brick');
+  var texGlass = makeFacadeTex('glass');
+  var texClassic = makeFacadeTex('classic');
+  var texModern = makeFacadeTex('modern');
+
+  var buildingMats = [
+    new THREE.MeshStandardMaterial({map:texPanel, roughness:0.85}),
+    new THREE.MeshStandardMaterial({map:texPanel, color:0xb0b0a0, roughness:0.85}),
+    new THREE.MeshStandardMaterial({map:texStalin, roughness:0.7}),
+    new THREE.MeshStandardMaterial({map:texClassic, roughness:0.75}),
+    new THREE.MeshStandardMaterial({map:texBrick, roughness:0.8}),
+    new THREE.MeshStandardMaterial({map:texModern, roughness:0.55}),
+    new THREE.MeshStandardMaterial({map:texStalin, color:0xd0b080, roughness:0.7}),
+    new THREE.MeshStandardMaterial({map:texClassic, color:0xf0e0c0, roughness:0.75}),
+    new THREE.MeshStandardMaterial({map:texPanel, color:0x909898, roughness:0.85}),
+    new THREE.MeshStandardMaterial({map:texModern, color:0xd0d8e0, roughness:0.5})
+  ];
+  var glassMatB = new THREE.MeshStandardMaterial({map:texGlass, roughness:0.15, metalness:0.6, transparent:true, opacity:0.85});
+  var roadMat = new THREE.MeshStandardMaterial({color:0x1c1c1c, roughness:0.95});
+  var highwayMat = new THREE.MeshStandardMaterial({color:0x151515, roughness:0.9});
+  var parkMat = new THREE.MeshStandardMaterial({color:0x2d6b2d, roughness:1});
+  var waterMat = new THREE.MeshStandardMaterial({color:0x2a6a9a, roughness:0.15, metalness:0.35});
+  var sidewalkMat = new THREE.MeshStandardMaterial({color:0x5a5a5a, roughness:0.9});
+  var carColors = [0xcc3333,0x3366cc,0xeeeeee,0x222222,0xddaa22,0x33aa55,0x8844aa,0xcccccc];
+
+  // ---- Moscow-inspired districts ----
+  var districts = [];
+  // Центр / Кремль-зона
+  districts.push({x:0, z:-1000, r:700, type:'downtown', dens:0.9, maxH:80, name:'CENTER'});
+  // Москва-Сити
+  districts.push({x:900, z:-600, r:550, type:'moscow_city', dens:0.95, maxH:420, name:'CITY'});
+  // Арбат / классика
+  districts.push({x:-400, z:-800, r:500, type:'classic', dens:0.75, maxH:45, name:'ARBAT'});
+  // Спальные районы
+  districts.push({x:-1800, z:-2000, r:900, type:'residential', dens:0.7, maxH:55, name:'SLEEP'});
+  districts.push({x:2000, z:-1800, r:850, type:'residential', dens:0.68, maxH:55, name:'SLEEP2'});
+  districts.push({x:-2200, z:800, r:700, type:'residential', dens:0.65, maxH:50, name:'SLEEP3'});
+  // Промзона
+  districts.push({x:-3500, z:200, r:700, type:'industrial', dens:0.5, maxH:45, name:'PROM'});
+  // Аэропорт
+  districts.push({x:0, z:200, r:600, type:'airport_zone', dens:0.15, maxH:30, name:'SVO'});
+  // Парк
+  districts.push({x:200, z:-2200, r:500, type:'park_zone', dens:0.1, maxH:20, name:'PARK'});
+
+  mapPOIs.push({x:0, z:-1000, color:'#f44', label:'КРЕМЛЬ', r:5});
+  mapPOIs.push({x:900, z:-600, color:'#8cf', label:'СИТИ', r:5});
+  mapPOIs.push({x:-400, z:-800, color:'#fc8', label:'АРБАТ', r:3});
+
+  for(var d=0; d<(PERF===0?5:10); d++){
+    var ang = srand(d*3.14) * Math.PI * 2;
+    var dist = 2500 + srand(d*5.7) * 5500;
+    var dx = Math.cos(ang) * dist;
+    var dz = -900 + Math.sin(ang) * dist * 0.85;
+    if(Math.abs(dx)<600 && Math.abs(dz)<1400) continue;
+    var types = ['residential','residential','suburb','mixed','commercial'];
+    var tp = types[Math.floor(srand(d*9.2)*types.length)];
+    var dens = ({suburb:0.3, residential:0.62, commercial:0.7, mixed:0.55})[tp] || 0.4;
+    var maxH = ({commercial:120, residential:55, mixed:70, suburb:30})[tp] || 40;
+    districts.push({x:dx, z:dz, r:450+srand(d*2.2)*600, type:tp, dens:dens, maxH:maxH});
+  }
+
+  function districtAt(x, z){
+    var best=null, bestD=1e9;
+    for(var i=0;i<districts.length;i++){
+      var dd=districts[i], dist=Math.hypot(x-dd.x, z-dd.z);
+      if(dist < dd.r && dist < bestD){ bestD=dist; best=dd; }
+    }
+    return best;
+  }
+
+  // ---- HIGHWAYS (long routes across map) ----
+  var highways = [
+    {x1:-12000, z1:-1000, x2:12000, z2:-1000, w:28},
+    {x1:0, z1:-12000, x2:0, z2:8000, w:26},
+    {x1:-8000, z1:3000, x2:9000, z2:-6000, w:22}
+  ];
+  if(PERF>=1){
+    highways.push({x1:5000, z1:-10000, x2:5000, z2:5000, w:22});
+    highways.push({x1:-6000, z1:-4000, x2:2000, z2:6000, w:20});
+  }
+  highways.forEach(function(hw, hi){
+    var dx = hw.x2-hw.x1, dz = hw.z2-hw.z1;
+    var len = Math.hypot(dx, dz);
+    var road = new THREE.Mesh(new THREE.BoxGeometry(hw.w, 0.4, len), highwayMat);
+    road.position.set((hw.x1+hw.x2)/2, 1.7, (hw.z1+hw.z2)/2);
+    road.rotation.y = -Math.atan2(dx, dz);
+    city.add(road);
+    // dashed center line
+    var segs = Math.floor(len/(PERF===0?160:80));
+    for(var s=0;s<segs;s++){
+      var t = (s+0.5)/segs;
+      var lx = hw.x1 + dx*t, lz = hw.z1 + dz*t;
+      var dash = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 18), new THREE.MeshBasicMaterial({color:0xffcc00}));
+      dash.position.set(lx, 2.0, lz);
+      dash.rotation.y = -Math.atan2(dx, dz);
+      city.add(dash);
+    }
+    mapPOIs.push({x:(hw.x1+hw.x2)/2, z:(hw.z1+hw.z2)/2, color:'#fc0', label:'HW'+(hi+1), r:2});
+  });
+
+  // ---- CITY STREET GRID (expanded) ----
+  var roadStepX = 70 + Math.floor(srand(1.1)*30);
+  var roadStepZ = 66 + Math.floor(srand(2.2)*28);
+  var cityMinX = -5000, cityMaxX = 5000, cityMinZ = -5500, cityMaxZ = 2500;
+
+  for(var rx = cityMinX; rx <= cityMaxX; rx += roadStepX * 2){
+    if(Math.abs(rx)<100) continue;
+    var road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.28, cityMaxZ-cityMinZ), roadMat);
+    road.position.set(rx, 1.55, (cityMinZ+cityMaxZ)/2); city.add(road);
+  }
+  for(var rz = cityMinZ; rz <= cityMaxZ; rz += roadStepZ * 2){
+    if(Math.abs(rz)<900) continue;
+    var road = new THREE.Mesh(new THREE.BoxGeometry(cityMaxX-cityMinX, 0.28, 14), roadMat);
+    road.position.set(0, 1.55, rz); city.add(road);
+  }
+  // denser local streets near downtown
+  for(var rx = -2000; rx <= 2000; rx += roadStepX){
+    if(Math.abs(rx)<100) continue;
+    var road = new THREE.Mesh(new THREE.BoxGeometry(9, 0.24, 3500), roadMat);
+    road.position.set(rx, 1.48, -900); city.add(road);
+  }
+  for(var rz = -2800; rz <= 400; rz += roadStepZ){
+    if(Math.abs(rz)<880) continue;
+    var road = new THREE.Mesh(new THREE.BoxGeometry(4000, 0.24, 9), roadMat);
+    road.position.set(0, 1.48, rz); city.add(road);
+  }
+
+  // ---- BUILDINGS ----
+  var buildCount=0;
+  var gridStep = PERF===0 ? 2 : 1;
+  var maxBuilds = PERF===0 ? 700 : (PERF===1 ? 1500 : 4000);
+  var stopBuild = false;
+  for(var gx=-55; gx<=55 && !stopBuild; gx+=gridStep){
+    for(var gz=-60; gz<=30; gz+=gridStep){
+      if(buildCount >= maxBuilds){ stopBuild=true; break; }
+      var bx = gx * roadStepX + (srand2(gx,gz)-0.5)*(roadStepX*0.3);
+      var bz = -1100 + gz * roadStepZ + (srand2(gx+10,gz)-0.5)*(roadStepZ*0.28);
+
+      // airport / runway clear
+      if(Math.abs(bx)<130 && bz>-1000 && bz<1100) continue;
+      if(bx>30 && bx<550 && bz>30 && bz<550) continue;
+      if(srand2(gx, gz+3) < 0.14) continue;
+
+      var dist = districtAt(bx, bz);
+      var dens = dist ? dist.dens : (Math.hypot(bx,bz+1000)<4000 ? 0.2 : 0.08);
+      if(srand2(gx*2, gz*3) > dens) continue;
+      var dtype = dist ? dist.type : (Math.hypot(bx,bz)<6000 ? 'suburb' : 'rural');
+      if(dtype==='airport_zone') continue;
+      var maxH = dist ? dist.maxH : 28;
+
+      // Parks
+      if(srand2(gx+50, gz+50) < (PERF===0?0.04:0.07)){
+        var pw=50+srand2(gx,1)*120, pd=50+srand2(gz,2)*120;
+        var park=new THREE.Mesh(new THREE.BoxGeometry(pw,1.6,pd), parkMat);
+        park.position.set(bx,2.1,bz); city.add(park);
+        var nTrees = PERF===0 ? (1+Math.floor(srand2(gx,gz)*2)) : (3+Math.floor(srand2(gx,gz)*8));
+        for(var ti=0; ti<nTrees; ti++){
+          var th = 6+srand2(ti,gx)*14;
+          var trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.5,th*0.35,5), new THREE.MeshStandardMaterial({color:0x4a3020}));
+          var crown=new THREE.Mesh(new THREE.SphereGeometry(1.5+srand2(ti,2)*2.5,5,4), new THREE.MeshStandardMaterial({color:0x1a6a1a}));
+          var tx=bx+(srand2(ti,1)-0.5)*pw*0.7, tz=bz+(srand2(ti,3)-0.5)*pd*0.7;
+          trunk.position.set(tx, th*0.15, tz); crown.position.set(tx, th*0.4, tz);
+          city.add(trunk); city.add(crown);
+        }
+        // park path
+        if(srand2(gx,9)<0.5){
+          var path=new THREE.Mesh(new THREE.BoxGeometry(pw*0.15,1.7,pd*0.9), sidewalkMat);
+          path.position.set(bx,2.15,bz); city.add(path);
+        }
+        if(srand2(gx,11)<0.15) mapPOIs.push({x:bx,z:bz,color:'#2d6',label:'PARK',r:2});
+        continue;
+      }
+      // Ponds
+      if(srand2(gx+99,gz+99)<0.012 && dtype!=='downtown'){
+        var water=new THREE.Mesh(new THREE.BoxGeometry(40+srand2(gx,5)*100,1,35+srand2(gz,6)*90), waterMat);
+        water.position.set(bx,1.9,bz); city.add(water);
+        continue;
+      }
+
+      var w,d,h,mat;
+      if(dtype==='moscow_city'){
+        w=30+srand2(gx,1)*40; d=30+srand2(gz,2)*40;
+        h=150+srand2(gx,gz)*maxH;
+        mat = glassMatB;
+      } else if(dtype==='downtown' || dtype==='classic'){
+        w=22+srand2(gx,1)*40; d=22+srand2(gz,2)*40;
+        h=25+srand2(gx,gz)*maxH;
+        // центр: классика / сталинки, редко стекло
+        mat = srand2(gx,7)<0.15 ? glassMatB : buildingMats[2+Math.floor(srand2(gx,8)*4)];
+      } else if(dtype==='industrial'){
+        w=45+srand2(gx,1)*70; d=40+srand2(gz,2)*60;
+        h=12+srand2(gx,gz)*maxH;
+        mat=buildingMats[4];
+      } else if(dtype==='commercial'){
+        w=30+srand2(gx,1)*55; d=28+srand2(gz,2)*45;
+        h=30+srand2(gx,gz)*maxH;
+        mat=buildingMats[5+Math.floor(srand2(gx,4)*3)%5];
+      } else if(dtype==='park_zone' || dtype==='airport_zone'){
+        continue;
+      } else if(dtype==='rural'){
+        w=12+srand2(gx,1)*20; d=12+srand2(gz,2)*18;
+        h=6+srand2(gx,gz)*18;
+        mat=buildingMats[0];
+      } else {
+        // спальники — панельки
+        w=18+srand2(gx,1)*28; d=14+srand2(gz,2)*22;
+        h=20+srand2(gx,gz)*maxH;
+        mat=buildingMats[Math.floor(srand2(gx,5)*2)]; // panel textures
+      }
+
+      var b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+      b.position.set(bx, h/2+2, bz); city.add(b);
+      addCollider(bx, 2, bz, w, h, d);
+      buildCount++;
+
+      // window strip detail for taller buildings (skip on low)
+      if(PERF>=1 && h>60 && srand2(gx,gz+12)<0.4){
+        var floors = Math.min(PERF>=2?12:6, Math.floor(h/14));
+        for(var f=1;f<floors;f++){
+          if(srand2(gx+f,gz)<0.4) continue;
+          var win=new THREE.Mesh(new THREE.BoxGeometry(w*0.7, 1.8, 0.3), new THREE.MeshBasicMaterial({color:0xaaccff}));
+          win.position.set(bx, 4+f*(h/floors), bz+d/2+0.2);
+          city.add(win);
+        }
+      }
+      if(h>120 && srand2(gx,gz+8)<0.35){
+        var ant=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.5,10+srand2(1,gx)*25,5), new THREE.MeshStandardMaterial({color:0x333333}));
+        ant.position.set(bx, h+8, bz); city.add(ant);
+      }
+    }
+  }
+
+  // District landmark towers
+  for(var i=1;i<districts.length;i++){
+    var dd=districts[i];
+    if(dd.type==='airport_zone') continue;
+    if(srand(i*11)<0.55){
+      var lh=40+srand(i*13)*130;
+      var lm=new THREE.Mesh(new THREE.BoxGeometry(16+srand(i)*20, lh, 16+srand(i+1)*20),
+        srand(i+2)<0.35 ? glassMatB : buildingMats[i%buildingMats.length]);
+      lm.position.set(dd.x+(srand(i+3)-0.5)*100, lh/2+2, dd.z+(srand(i+4)-0.5)*100);
+      city.add(lm);
+      addCollider(lm.position.x, 2, lm.position.z, 30, lh, 30);
+    }
+  }
+
+  // ---- CARS on roads (simple moving traffic) ----
+  var cars = [];
+  var carGeo = new THREE.BoxGeometry(2.2, 1.2, 4.5);
+  var carGeo2 = new THREE.BoxGeometry(2.6, 1.8, 6); // truck
+  function spawnCarsOnHighway(hw, count){
+    var dx=hw.x2-hw.x1, dz=hw.z2-hw.z1, len=Math.hypot(dx,dz);
+    var ux=dx/len, uz=dz/len;
+    for(var c=0;c<count;c++){
+      var t0 = srand(c*7+hw.w)*0.95+0.02;
+      var isTruck = srand(c+hw.w)<0.2;
+      var mesh = new THREE.Mesh(isTruck?carGeo2:carGeo, new THREE.MeshStandardMaterial({
+        color: carColors[Math.floor(srand(c*3+1)*carColors.length)], roughness:0.4, metalness:0.3
+      }));
+      var side = (c%2===0?1:-1) * (hw.w*0.22);
+      // perpendicular offset
+      var px = -uz * side, pz = ux * side;
+      mesh.position.set(hw.x1+dx*t0+px, isTruck?2.2:1.9, hw.z1+dz*t0+pz);
+      mesh.rotation.y = -Math.atan2(dx, dz);
+      city.add(mesh);
+      cars.push({
+        mesh: mesh,
+        x1:hw.x1, z1:hw.z1, dx:dx, dz:dz, len:len,
+        t: t0,
+        speed: (0.015 + srand(c*2)*0.025) * (c%2===0?1:-1),
+        sideX: px, sideZ: pz,
+        isTruck: isTruck
+      });
+    }
+  }
+  highways.forEach(function(hw,i){ var n = PERF===0 ? 4 : (PERF===1 ? 8 : 14); if(i===0 && PERF>0) n += 6; spawnCarsOnHighway(hw, n); });
+
+  // cars on city avenues (N-S strips)
+  for(var ai=0; ai<8; ai++){
+    var ax = -1600 + ai*400;
+    if(Math.abs(ax)<120) continue;
+    for(var c=0;c<(PERF===0?2:(PERF===1?4:6));c++){
+      var mesh=new THREE.Mesh(carGeo, new THREE.MeshStandardMaterial({
+        color:carColors[Math.floor(srand(ai*20+c)*carColors.length)], roughness:0.45, metalness:0.25
+      }));
+      var z0 = -2500 + srand(ai+c)*3000;
+      mesh.position.set(ax + (c%2?4:-4), 1.9, z0);
+      mesh.rotation.y = c%2?0:Math.PI;
+      city.add(mesh);
+      cars.push({
+        mesh:mesh, x1:ax, z1:-2800, dx:0, dz:4000, len:4000,
+        t: (z0+2800)/4000, speed:(0.012+srand(c)*0.02)*(c%2?1:-1),
+        sideX:(c%2?4:-4), sideZ:0, isTruck:false
+      });
+    }
+  }
+
+  // expose cars for animation
+  window.__cityCars = cars;
+
+  console.log('City seed='+CITY_SEED+' buildings='+buildCount+' districts='+districts.length+' cars='+cars.length+' PERF='+PERF);
+
+  function poi(mesh, x,y,z, w,h,d, color, label){
+    mesh.position.set(x,y,z); city.add(mesh);
+    addCollider(x, y-h/2, z, w, h, d);
+    mapPOIs.push({x:x, z:z, color:color||'#0f0', label:label||'', r:4});
+  }
+
+  // ===== Moscow landmarks =====
+  // Останкинская башня
+  var ostankino = new THREE.Mesh(new THREE.CylinderGeometry(4, 14, 420, 10), new THREE.MeshStandardMaterial({color:0xc8c8c8, metalness:0.4, roughness:0.35}));
+  poi(ostankino, 200, 212, -1600, 28, 420, 28, '#eee', 'ОСТАНК');
+  var ostTip = new THREE.Mesh(new THREE.ConeGeometry(8, 50, 8), new THREE.MeshStandardMaterial({color:0xcc3333}));
+  ostTip.position.set(200, 445, -1600); city.add(ostTip);
+
+  // Кремлёвские стены (упрощённо)
+  var kremlinWall = new THREE.Mesh(new THREE.BoxGeometry(280, 18, 220), new THREE.MeshStandardMaterial({color:0x8b1a1a, roughness:0.8}));
+  poi(kremlinWall, 0, 11, -1050, 280, 18, 220, '#a22', 'КРЕМЛЬ');
+  // Спасская башня (условно)
+  var spasskaya = new THREE.Mesh(new THREE.BoxGeometry(22, 55, 22), new THREE.MeshStandardMaterial({color:0x9a2a2a}));
+  spasskaya.position.set(0, 35, -940); city.add(spasskaya);
+  var dome = new THREE.Mesh(new THREE.SphereGeometry(10, 10, 8), new THREE.MeshStandardMaterial({color:0xd4af37, metalness:0.7, roughness:0.3}));
+  dome.position.set(0, 70, -940); city.add(dome);
+  var spire = new THREE.Mesh(new THREE.ConeGeometry(3, 25, 6), new THREE.MeshStandardMaterial({color:0xd4af37, metalness:0.8}));
+  spire.position.set(0, 90, -940); city.add(spire);
+
+  // Лужники
+  var luzhniki = new THREE.Mesh(new THREE.CylinderGeometry(110, 120, 32, 24), new THREE.MeshStandardMaterial({color:0x2a5a3a}));
+  poi(luzhniki, -600, 18, -400, 240, 32, 240, '#3a7', 'ЛУЖН');
+
+  // Москва-Сити небоскрёбы
+  var cityTowers = [
+    {x:850, z:-580, w:28, d:28, h:360},
+    {x:920, z:-620, w:32, d:32, h:300},
+    {x:980, z:-560, w:24, d:40, h:280},
+    {x:880, z:-520, w:36, d:24, h:240},
+    {x:950, z:-680, w:22, d:22, h:320},
+    {x:1020, z:-600, w:40, d:30, h:200}
+  ];
+  for(var i=0;i<cityTowers.length;i++){
+    var s=cityTowers[i];
+    var sk=new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.d), glassMatB);
+    sk.position.set(s.x, s.h/2+2, s.z); city.add(sk);
+    addCollider(s.x, 2, s.z, s.w, s.h, s.d);
+  }
+  mapPOIs.push({x:920, z:-600, color:'#8cf', label:'СИТИ', r:6});
+
+  // Москва-река (полоса воды)
+  var river = new THREE.Mesh(new THREE.BoxGeometry(80, 1.5, 3500), waterMat);
+  river.position.set(400, 1.5, -800); city.add(river);
+  var river2 = new THREE.Mesh(new THREE.BoxGeometry(2000, 1.5, 70), waterMat);
+  river2.position.set(200, 1.5, -200); city.add(river2);
+  mapPOIs.push({x:400, z:-800, color:'#2af', label:'РЕКА', r:3});
+
+  // Мост
+  var bridge=new THREE.Mesh(new THREE.BoxGeometry(40, 12, 200), new THREE.MeshStandardMaterial({color:0x666666}));
+  poi(bridge, 400, 14, -200, 40, 12, 200, '#888', 'МОСТ');
+
+  // ГУМ / ТД (жёлтое здание у Кремля)
+  var gum = new THREE.Mesh(new THREE.BoxGeometry(140, 28, 50), new THREE.MeshStandardMaterial({map:texClassic, roughness:0.7}));
+  poi(gum, 80, 16, -920, 140, 28, 50, '#fc8', 'ГУМ');
+
+  // МГУ главное здание (сталинская высотка)
+  var mgu = new THREE.Mesh(new THREE.BoxGeometry(60, 180, 50), new THREE.MeshStandardMaterial({map:texStalin, roughness:0.65}));
+  poi(mgu, -1200, 92, -400, 60, 180, 50, '#da8', 'МГУ');
+  var mguSpire = new THREE.Mesh(new THREE.ConeGeometry(8, 60, 8), new THREE.MeshStandardMaterial({color:0xd4af37, metalness:0.6}));
+  mguSpire.position.set(-1200, 210, -400); city.add(mguSpire);
+
+  // Промзона
+  for(var i=0;i<10;i++){
+    var fact=new THREE.Mesh(new THREE.BoxGeometry(50+srand(i)*40, 25+srand(i+1)*35, 40+srand(i+2)*30), new THREE.MeshStandardMaterial({map:texBrick, roughness:0.85}));
+    var fx=-3600+(i%4)*180, fz=150+Math.floor(i/4)*160;
+    fact.position.set(fx, 20, fz); city.add(fact);
+    addCollider(fx, 2, fz, 60, 40, 50);
+  }
+  mapPOIs.push({x:-3500, z:250, color:'#a84', label:'ПРОМ', r:4});
+
+  // ВДНХ-ish
+  var vdnh = new THREE.Mesh(new THREE.BoxGeometry(100, 40, 80), new THREE.MeshStandardMaterial({map:texClassic, roughness:0.7}));
+  poi(vdnh, 300, 22, -2000, 100, 40, 80, '#fd8', 'ВДНХ');
+
+  // Второй аэродром
+  var rwy2=new THREE.Mesh(new THREE.BoxGeometry(28,0.4,900), new THREE.MeshStandardMaterial({color:0x333333}));
+  rwy2.position.set(4200, 2, -400); city.add(rwy2);
+  mapPOIs.push({x:4200, z:-400, color:'#aaa', label:'ВНУК', r:4});
+
+  scene.add(city);
+
+  // Scattered rural POIs / villages / towers across map
+  for(var i=0;i<(PERF===0?12:(PERF===1?25:45));i++){
+    var px=(Math.random()-0.5)*30000;
+    var pz=(Math.random()-0.5)*30000;
+    if(Math.hypot(px, pz+1100)<3500) continue;
+    var th=25+Math.random()*70;
+    var t=new THREE.Mesh(new THREE.CylinderGeometry(1.2,2,th,6), new THREE.MeshStandardMaterial({color:0x888888}));
+    t.position.set(px, th/2, pz); scene.add(t);
+    addCollider(px, 0, pz, 4, th, 4);
+    if(Math.random()>0.55){
+      var hang=new THREE.Mesh(new THREE.BoxGeometry(35,12,28), new THREE.MeshStandardMaterial({color:0x6a5a4a}));
+      hang.position.set(px+25, 6, pz); scene.add(hang);
+      addCollider(px+25, 0, pz, 35, 12, 28);
+    }
+    if(i%4===0) mapPOIs.push({x:px, z:pz, color:'#8a8', label:'', r:2});
+  }
+
+  // Roads (simple dark strips through city)
+  for(var r=-8;r<=8;r++){
+    var road=new THREE.Mesh(new THREE.BoxGeometry(18,0.3,2800), new THREE.MeshStandardMaterial({color:0x222222}));
+    road.position.set(r*190, 1.6, -1000); city.add(road);
+  }
+  for(var r=-6;r<=6;r++){
+    var road=new THREE.Mesh(new THREE.BoxGeometry(3200,0.3,18), new THREE.MeshStandardMaterial({color:0x222222}));
+    road.position.set(0, 1.6, -1000+r*160); city.add(road);
+  }
+}
+createWorld();
+applyGfxSettings();
+
+// Soft cloud puffs
+(function makeClouds(){
+  var clouds = [];
+  var n = PERF===0 ? 12 : (PERF===1 ? 22 : 36);
+  var mat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.35, depthWrite:false});
+  for(var i=0;i<n;i++){
+    var g = new THREE.Group();
+    var parts = 3 + (i % 3);
+    for(var j=0;j<parts;j++){
+      var s = 40 + Math.random()*90;
+      var m = new THREE.Mesh(new THREE.SphereGeometry(s, 7, 5), mat);
+      m.position.set((Math.random()-0.5)*120, (Math.random()-0.5)*30, (Math.random()-0.5)*80);
+      g.add(m);
+    }
+    g.position.set((Math.random()-0.5)*16000, 400+Math.random()*900, (Math.random()-0.5)*16000);
+    scene.add(g);
+    clouds.push({mesh:g, drift: 2+Math.random()*4});
+  }
+  window.__clouds = clouds;
+})();
+
+function createPlaneModel(cfg, type){
+  var g = new THREE.Group();
+  var body = new THREE.MeshStandardMaterial({color:cfg.color, roughness:0.32, metalness:0.28});
+  var dark = new THREE.MeshStandardMaterial({color:0x1a1a1a, roughness:0.4, metalness:0.6});
+  var accent = new THREE.MeshStandardMaterial({color:cfg.accent, roughness:0.4, metalness:0.3});
+  var glass = new THREE.MeshStandardMaterial({color:0x88ccff, roughness:0.08, metalness:0.15, transparent:true, opacity:0.45});
+  var flapMat = new THREE.MeshStandardMaterial({color:cfg.accent, roughness:0.45, metalness:0.2});
+  var flaps = []; // groups to rotate
+  var gearParts = []; // {group, downPos, upPos, downRot, upRot}
+
+  function addFlap(parent, w, h, d, x, y, z){
+    var fg = new THREE.Group();
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flapMat);
+    mesh.position.set(0, 0, d/2); // hinge at leading edge of flap
+    fg.add(mesh);
+    fg.position.set(x, y, z);
+    parent.add(fg);
+    flaps.push(fg);
+    return fg;
+  }
+  function addGearLeg(parent, wx, wy, wz, wheelR){
+    var leg = new THREE.Group();
+    var strut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.0, 6), dark);
+    strut.position.y = -0.5;
+    leg.add(strut);
+    var wheel = new THREE.Mesh(new THREE.CylinderGeometry(wheelR||0.22, wheelR||0.22, 0.14, 10), new THREE.MeshStandardMaterial({color:0x111111}));
+    wheel.rotation.z = Math.PI/2;
+    wheel.position.y = -1.05;
+    leg.add(wheel);
+    leg.position.set(wx, wy, wz);
+    parent.add(leg);
+    gearParts.push({
+      group: leg,
+      downY: wy,
+      upY: wy + 1.35,
+      downRotZ: 0,
+      upRotZ: wx < 0 ? 0.9 : (wx > 0 ? -0.9 : 0.2)
+    });
+    return leg;
+  }
+
+  if(type === 0){ // Cessna
+    var fus=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.42,5.8,12),body); fus.rotation.x=Math.PI/2; fus.position.set(0,0.15,0.4); g.add(fus);
+    var nose=new THREE.Mesh(new THREE.ConeGeometry(0.42,1.5,12),body); nose.rotation.x=-Math.PI/2; nose.position.set(0,0.15,-3.1); g.add(nose);
+    var canopy=new THREE.Mesh(new THREE.SphereGeometry(0.55,8,6,0,Math.PI*2,0,Math.PI*0.55),glass); canopy.scale.set(1.15,0.9,1.5); canopy.position.set(0,0.65,-0.9); g.add(canopy);
+    var wing=new THREE.Mesh(new THREE.BoxGeometry(11.2,0.12,1.5),body); wing.position.set(0,1.05,-0.05); g.add(wing);
+    addFlap(g, 2.2, 0.08, 0.45, -3.2, 1.02, 0.55);
+    addFlap(g, 2.2, 0.08, 0.45, 3.2, 1.02, 0.55);
+    var sL=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.05,0.06),dark); sL.position.set(-2.6,0.5,-0.1); g.add(sL);
+    var sR=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.05,0.06),dark); sR.position.set(2.6,0.5,-0.1); g.add(sR);
+    var hstab=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.09,1.05),body); hstab.position.set(0,0.45,3.55); g.add(hstab);
+    var vstab=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.55,1.2),body); vstab.position.set(0,1.15,3.6); g.add(vstab);
+    var prop=new THREE.Mesh(new THREE.BoxGeometry(0.07,1.85,0.14),dark); prop.position.set(0,0.15,-3.95); g.add(prop); g.userData.prop=prop;
+    addGearLeg(g, 0, 0.1, -2.4, 0.2);
+    addGearLeg(g, -1.5, 0.1, 0.9, 0.24);
+    addGearLeg(g, 1.5, 0.1, 0.9, 0.24);
+  } else if(type === 1){ // Citation
+    var fus=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.48,8.5,12),body); fus.rotation.x=Math.PI/2; fus.position.set(0,0.1,0.3); g.add(fus);
+    var nose=new THREE.Mesh(new THREE.ConeGeometry(0.48,2.0,12),body); nose.rotation.x=-Math.PI/2; nose.position.set(0,0.1,-4.85); g.add(nose);
+    var canopy=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6,0,Math.PI*2,0,Math.PI*0.5),glass); canopy.scale.set(1.1,0.85,1.4); canopy.position.set(0,0.55,-2.2); g.add(canopy);
+    var wing=new THREE.Mesh(new THREE.BoxGeometry(13.5,0.14,2.0),body); wing.position.set(0,-0.15,0.1); g.add(wing);
+    addFlap(g, 2.8, 0.1, 0.55, -4.0, -0.2, 0.85);
+    addFlap(g, 2.8, 0.1, 0.55, 4.0, -0.2, 0.85);
+    var engL=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.4,2.4,8),dark); engL.rotation.x=Math.PI/2; engL.position.set(-2.5,-0.55,1.4); g.add(engL);
+    var engR=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.4,2.4,8),dark); engR.rotation.x=Math.PI/2; engR.position.set(2.5,-0.55,1.4); g.add(engR);
+    var hstab=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.1,1.35),body); hstab.position.set(0,0.5,4.5); g.add(hstab);
+    var vstab=new THREE.Mesh(new THREE.BoxGeometry(0.12,2.05,1.5),body); vstab.position.set(0,1.3,4.55); g.add(vstab);
+    addGearLeg(g, 0, 0.05, -3.2, 0.22);
+    addGearLeg(g, -1.8, 0.05, 1.0, 0.26);
+    addGearLeg(g, 1.8, 0.05, 1.0, 0.26);
+  } else if(type === 2){ // F-16
+    var fus=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.32,9.5,10),body); fus.rotation.x=Math.PI/2; fus.position.set(0,0.05,0.2); g.add(fus);
+    var nose=new THREE.Mesh(new THREE.ConeGeometry(0.32,2.4,10),body); nose.rotation.x=-Math.PI/2; nose.position.set(0,0.05,-5.55); g.add(nose);
+    var canopy=new THREE.Mesh(new THREE.SphereGeometry(0.52,8,6,0,Math.PI*2,0,Math.PI*0.5),glass); canopy.scale.set(1.05,0.8,1.35); canopy.position.set(0,0.45,-2.0); g.add(canopy);
+    var wing=new THREE.Mesh(new THREE.BoxGeometry(10.5,0.11,2.5),body); wing.position.set(0,-0.12,0.5); g.add(wing);
+    addFlap(g, 2.0, 0.08, 0.5, -3.2, -0.15, 1.4);
+    addFlap(g, 2.0, 0.08, 0.5, 3.2, -0.15, 1.4);
+    var tipL=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.7,1.6),accent); tipL.position.set(-5.2,0.15,0.6); g.add(tipL);
+    var tipR=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.7,1.6),accent); tipR.position.set(5.2,0.15,0.6); g.add(tipR);
+    var vstab=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.85,1.7),body); vstab.position.set(0,1.05,4.7); g.add(vstab);
+    addGearLeg(g, 0, 0.0, -2.8, 0.2);
+    addGearLeg(g, -1.4, 0.0, 1.2, 0.24);
+    addGearLeg(g, 1.4, 0.0, 1.2, 0.24);
+  } else if(type === 3){ // Airbus A320-ish
+    var fus=new THREE.Mesh(new THREE.CylinderGeometry(1.1,0.95,18,14),body); fus.rotation.x=Math.PI/2; fus.position.set(0,0.3,0.5); g.add(fus);
+    var nose=new THREE.Mesh(new THREE.ConeGeometry(0.95,3.2,14),body); nose.rotation.x=-Math.PI/2; nose.position.set(0,0.3,-10.2); g.add(nose);
+    var canopy=new THREE.Mesh(new THREE.SphereGeometry(0.7,8,6,0,Math.PI*2,0,Math.PI*0.45),glass); canopy.scale.set(1.3,0.9,1.6); canopy.position.set(0,1.0,-6.5); g.add(canopy);
+    var wing=new THREE.Mesh(new THREE.BoxGeometry(28,0.2,4.2),body); wing.position.set(0,-0.2,0); g.add(wing);
+    addFlap(g, 5.5, 0.12, 0.9, -8, -0.28, 1.6);
+    addFlap(g, 5.5, 0.12, 0.9, 8, -0.28, 1.6);
+    addFlap(g, 3.5, 0.1, 0.7, -4, -0.28, 1.7);
+    addFlap(g, 3.5, 0.1, 0.7, 4, -0.28, 1.7);
+    var engL=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.75,3.5,10),dark); engL.rotation.x=Math.PI/2; engL.position.set(-5.5,-1.3,0.5); g.add(engL);
+    var engR=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.75,3.5,10),dark); engR.rotation.x=Math.PI/2; engR.position.set(5.5,-1.3,0.5); g.add(engR);
+    var hstab=new THREE.Mesh(new THREE.BoxGeometry(10,0.15,2.2),body); hstab.position.set(0,0.8,9.5); g.add(hstab);
+    var vstab=new THREE.Mesh(new THREE.BoxGeometry(0.18,4.2,3),body); vstab.position.set(0,2.5,9.2); g.add(vstab);
+    var fin=new THREE.Mesh(new THREE.BoxGeometry(0.2,3.5,1.2),accent); fin.position.set(0,3.2,10.2); g.add(fin);
+    addGearLeg(g, 0, 0.2, -6, 0.35);
+    addGearLeg(g, -2.8, 0.2, 1.5, 0.4);
+    addGearLeg(g, 2.8, 0.2, 1.5, 0.4);
+    g.scale.setScalar(0.85);
+  } else if(type === 4){ // Spitfire
+    var fus=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.35,6.5,10),body); fus.rotation.x=Math.PI/2; fus.position.set(0,0.2,0.2); g.add(fus);
+    var nose=new THREE.Mesh(new THREE.ConeGeometry(0.35,2.0,10),body); nose.rotation.x=-Math.PI/2; nose.position.set(0,0.2,-4.0); g.add(nose);
+    var canopy=new THREE.Mesh(new THREE.SphereGeometry(0.45,8,6,0,Math.PI*2,0,Math.PI*0.5),glass); canopy.scale.set(1.0,0.85,1.3); canopy.position.set(0,0.55,-0.5); g.add(canopy);
+    // elliptical-ish wing as box
+    var wing=new THREE.Mesh(new THREE.BoxGeometry(12,0.1,2.0),body); wing.position.set(0,0.15,0); g.add(wing);
+    addFlap(g, 2.4, 0.07, 0.4, -3.5, 0.12, 0.7);
+    addFlap(g, 2.4, 0.07, 0.4, 3.5, 0.12, 0.7);
+    var hstab=new THREE.Mesh(new THREE.BoxGeometry(3.8,0.08,1.1),body); hstab.position.set(0,0.5,3.6); g.add(hstab);
+    var vstab=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.4,1.3),body); vstab.position.set(0,1.1,3.7); g.add(vstab);
+    var prop=new THREE.Mesh(new THREE.BoxGeometry(0.08,2.0,0.16),dark); prop.position.set(0,0.2,-5.1); g.add(prop); g.userData.prop=prop;
+    addGearLeg(g, -1.3, 0.05, 0.3, 0.22);
+    addGearLeg(g, 1.3, 0.05, 0.3, 0.22);
+    // tail wheel small
+    var tw=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6), dark); tw.position.set(0,-0.3,3.5); g.add(tw);
+  } else { // Heli type 5
+    var fus=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.35,4.6),body); fus.position.set(0,0.2,0.2); g.add(fus);
+    var tail=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.32,4.2),body); tail.position.set(0,0.4,4.2); g.add(tail);
+    var cabin=new THREE.Mesh(new THREE.SphereGeometry(0.95,8,6,0,Math.PI*2,0,Math.PI*0.6),glass); cabin.scale.set(1.15,0.95,1.25); cabin.position.set(0,0.5,-1.4); g.add(cabin);
+    var rotor=new THREE.Group();
+    var b1=new THREE.Mesh(new THREE.BoxGeometry(9.5,0.04,0.28),dark);
+    var b2=new THREE.Mesh(new THREE.BoxGeometry(9.5,0.04,0.28),dark); b2.rotation.y=Math.PI/2;
+    rotor.add(b1); rotor.add(b2); rotor.position.set(0,1.5,0.1); g.add(rotor); g.userData.rotor=rotor;
+    var tR=new THREE.Mesh(new THREE.BoxGeometry(0.07,1.5,0.14),dark); tR.position.set(0.35,0.55,6.1); g.add(tR); g.userData.tailRotor=tR;
+    var skL=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,3.6),dark); skL.position.set(-0.75,-0.85,0); g.add(skL);
+    var skR=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,3.6),dark); skR.position.set(0.75,-0.85,0); g.add(skR);
+  }
+
+  g.userData.flaps = flaps;
+  g.userData.gearParts = gearParts;
+  if(type === 5) g.scale.setScalar(1.25);
+  else if(type !== 3) g.scale.setScalar(1.15);
+  return g;
+}
+
+var aircraftMesh = null;
+function spawnOnRunway(){
+  // Threshold end of main runway, facing takeoff toward -Z
+  state.position.set(0, 4.0, 650);
+  state.velocity.set(0, 0, 0);
+  state.orientation.identity();
+  state.angularVel.set(0, 0, 0);
+  state.thrust = 0;
+  state.flaps = 0;
+  state.gear = true;
+  state.gearAnim = 1;
+  state.onGround = true;
+  state.justLanded = false;
+  state.crashed = false;
+  state.spawnGrace = 2.0;
+  state._landScored = false;
+  state.touchPitch = state.touchRoll = state.touchYaw = 0;
+  state.fireHeld = false;
+  state.gunTimer = 0;
+  state.lastPos.set(0, 4.0, 650);
+  if(AIRCRAFT[state.acIndex] && AIRCRAFT[state.acIndex].mode === 'heli'){
+    state.position.y = 8;
+    state.thrust = 0.55;
+  }
+  updateThrOrientation();
+}
+
+function switchAircraft(idx){
+  if(aircraftMesh)scene.remove(aircraftMesh);
+  state.acIndex=idx; state.usedAircraft.add(idx); state.crashed=false;
+  document.getElementById('crashMsg').style.display='none';
+  var cfg=AIRCRAFT[idx];
+  aircraftMesh=createPlaneModel(cfg,idx); scene.add(aircraftMesh);
+  document.querySelectorAll('#menu button[data-ac]').forEach(function(b){b.classList.toggle('active',+b.dataset.ac===idx)});
+  var fireBtn=document.getElementById('tFire');
+  if(fireBtn) fireBtn.style.display = cfg.armed ? 'inline-flex' : 'none';
+  state.ammo = cfg.armed ? 999 : 0;
+  state.gunTimer = 0;
+  spawnOnRunway();
+}
+switchAircraft(0);
+
+var keyMap={KeyW:'throttleUp',KeyS:'throttleDown',KeyA:'yawLeft',KeyD:'yawRight',
+  ArrowUp:'pitchUp',ArrowDown:'pitchDown',ArrowLeft:'rollLeft',ArrowRight:'rollRight',
+  KeyF:'flaps',KeyG:'gear',KeyC:'camera',KeyR:'reset'};
+window.addEventListener('keydown',function(e){
+  var a=keyMap[e.code]; if(a)state.keys[a]=true;
+  if(e.key==='ц'||e.key==='Ц')state.keys.throttleUp=true;
+  if(e.key==='ы'||e.key==='Ы')state.keys.throttleDown=true;
+  if(e.key==='ф'||e.key==='Ф')state.keys.yawLeft=true;
+  if(e.key==='в'||e.key==='В')state.keys.yawRight=true;
+  if(e.code==='KeyR')resetFlight();
+  if(e.code==='Digit1')switchAircraft(0);
+  if(e.code==='Digit2')switchAircraft(1);
+  if(e.code==='Digit3')switchAircraft(2);
+  if(e.code==='Digit4')switchAircraft(3);
+  if(e.code==='Digit5')switchAircraft(4);
+  if(e.code==='Digit6')switchAircraft(5);
+  if(e.code==='KeyH')document.getElementById('btnAch').click();
+  if(e.code==='Space'){ state.fireHeld=true; e.preventDefault(); }
+  if(e.code==='Equal'||e.code==='NumpadAdd'){state.sensitivity=Math.min(4.0,+(state.sensitivity+0.1).toFixed(1));updateSensUI()}
+  if(e.code==='Minus'||e.code==='NumpadSubtract'){state.sensitivity=Math.max(0.5,+(state.sensitivity-0.1).toFixed(1));updateSensUI()}
+});
+window.addEventListener('keyup',function(e){
+  var a=keyMap[e.code]; if(a)state.keys[a]=false;
+  if(e.key==='ц'||e.key==='Ц')state.keys.throttleUp=false;
+  if(e.key==='ы'||e.key==='Ы')state.keys.throttleDown=false;
+  if(e.key==='ф'||e.key==='Ф')state.keys.yawLeft=false;
+  if(e.key==='в'||e.key==='В')state.keys.yawRight=false;
+  if(e.code==='Space') state.fireHeld=false;
+});
+
+document.querySelectorAll('#menu button[data-ac]').forEach(function(btn){
+  btn.onclick=function(){switchAircraft(+btn.dataset.ac)};
+});
+var sensSlider=document.getElementById('sensSlider');
+function updateSensUI(){
+  sensSlider.value=state.sensitivity.toFixed(1);
+  document.getElementById('sensLabel').textContent=state.sensitivity.toFixed(1);
+  document.getElementById('sensVal').textContent=state.sensitivity.toFixed(1);
+}
+sensSlider.oninput=function(){state.sensitivity=parseFloat(this.value);updateSensUI()};
+
+// Sticks
+function setupStick(zoneId,knobId,onMove){
+  var zone=document.getElementById(zoneId);
+  var knob=document.getElementById(knobId);
+  var active=false,pid=null,cx=0,cy=0,maxR=0;
+  function start(e){
+    var t=e.changedTouches?e.changedTouches[0]:e;
+    var r=zone.getBoundingClientRect();
+    cx=r.left+r.width/2; cy=r.top+r.height/2; maxR=r.width*0.38;
+    active=true; pid=t.identifier!==undefined?t.identifier:0;
+    move(t); e.preventDefault();
+  }
+  function move(t){
+    if(!active)return;
+    var dx=t.clientX-cx,dy=t.clientY-cy;
+    var len=Math.sqrt(dx*dx+dy*dy);
+    if(len>maxR){dx=dx/len*maxR; dy=dy/len*maxR}
+    knob.style.left=(50+dx/maxR*38)+'%';
+    knob.style.top=(50+dy/maxR*38)+'%';
+    knob.style.transform='translate(-50%,-50%)';
+    onMove(dx/maxR,dy/maxR);
+  }
+  function end(e){
+    if(!active)return;
+    if(e.changedTouches){
+      var found=false;
+      for(var i=0;i<e.changedTouches.length;i++) if(e.changedTouches[i].identifier===pid) found=true;
+      if(!found)return;
+    }
+    active=false; pid=null;
+    knob.style.left='31%'; knob.style.top='31%'; knob.style.transform='';
+    onMove(0,0);
+  }
+  zone.addEventListener('touchstart',start,{passive:false});
+  zone.addEventListener('touchmove',function(e){
+    if(!active)return;
+    for(var i=0;i<e.changedTouches.length;i++) if(e.changedTouches[i].identifier===pid) move(e.changedTouches[i]);
+    e.preventDefault();
+  },{passive:false});
+  zone.addEventListener('touchend',end);
+  zone.addEventListener('touchcancel',end);
+}
+setupStick('stickL','knobL',function(x,y){state.touchRoll=-x; state.touchPitch=y});
+setupStick('stickR','knobR',function(x,y){state.touchYaw=-x});
+
+// Throttle — works both orientations
+(function(){
+  var bar=document.getElementById('thrBar');
+  var fill=document.getElementById('thrFill');
+  var active=false;
+  function setFromEvent(clientX,clientY){
+    var r=bar.getBoundingClientRect();
+    var portrait=window.matchMedia('(orientation: portrait)').matches;
+    var t;
+    if(portrait){
+      t=(clientX-r.left)/r.width;
+    } else {
+      t=1-((clientY-r.top)/r.height);
+    }
+    state.thrust=Math.max(0,Math.min(1,t));
+    updateThrOrientation();
+  }
+  bar.addEventListener('touchstart',function(e){active=true; setFromEvent(e.changedTouches[0].clientX,e.changedTouches[0].clientY); e.preventDefault()},{passive:false});
+  bar.addEventListener('touchmove',function(e){if(active){setFromEvent(e.changedTouches[0].clientX,e.changedTouches[0].clientY); e.preventDefault()}},{passive:false});
+  bar.addEventListener('touchend',function(){active=false});
+})();
+
+document.getElementById('tFlaps').addEventListener('touchstart',function(e){state.keys.flaps=true; e.preventDefault()},{passive:false});
+document.getElementById('tFlaps').addEventListener('touchend',function(){state.keys.flaps=false});
+document.getElementById('tGear').addEventListener('touchstart',function(e){
+  if(!state._gearT&&AIRCRAFT[state.acIndex].mode!=='heli'){state.gear=!state.gear; state._gearT=true}
+  e.preventDefault();
+},{passive:false});
+document.getElementById('tGear').addEventListener('touchend',function(){state._gearT=false});
+document.getElementById('tCam').addEventListener('touchstart',function(e){state.cameraMode=(state.cameraMode+1)%3; e.preventDefault()},{passive:false});
+document.getElementById('tReset').addEventListener('touchstart',function(e){resetFlight(); e.preventDefault()},{passive:false});
+document.getElementById('tFire').addEventListener('touchstart',function(e){state.fireHeld=true; e.preventDefault()},{passive:false});
+document.getElementById('tFire').addEventListener('touchend',function(){state.fireHeld=false});
+document.getElementById('tFire').addEventListener('touchcancel',function(){state.fireHeld=false});
+document.getElementById('tFire').addEventListener('mousedown',function(){state.fireHeld=true});
+document.getElementById('tFire').addEventListener('mouseup',function(){state.fireHeld=false});
+document.getElementById('tFire').addEventListener('mouseleave',function(){state.fireHeld=false});
+
+var gamepadIndex=null;
+var gpMap = {
+  roll:0, pitch:1, yaw:3, throttle:2,
+  invRoll:false, invPitch:false, invYaw:false, invThr:false,
+  thrMode:'full', // centered | full | raw01
+  calibrated:false
+};
+try{
+  var savedGp = JSON.parse(localStorage.getItem('fs_gpmap')||'null');
+  if(savedGp && typeof savedGp.roll==='number') Object.assign(gpMap, savedGp);
+}catch(e){}
+
+function saveGpMap(){
+  try{ localStorage.setItem('fs_gpmap', JSON.stringify(gpMap)); }catch(e){}
+}
+
+function openGpCal(){
+  var el = document.getElementById('gpCal');
+  if(!el) return;
+  el.style.display = 'block';
+  // fill selects
+  var gp = gamepadIndex!==null ? navigator.getGamepads()[gamepadIndex] : null;
+  var n = gp && gp.axes ? gp.axes.length : 8;
+  ['gpAxRoll','gpAxPitch','gpAxYaw','gpAxThr'].forEach(function(id){
+    var sel = document.getElementById(id);
+    if(!sel) return;
+    var cur = sel.id==='gpAxRoll'?gpMap.roll: sel.id==='gpAxPitch'?gpMap.pitch: sel.id==='gpAxYaw'?gpMap.yaw:gpMap.throttle;
+    sel.innerHTML = '';
+    for(var i=0;i<n;i++){
+      var o=document.createElement('option');
+      o.value=i; o.textContent='Ось '+i;
+      if(i===cur) o.selected=true;
+      sel.appendChild(o);
+    }
+  });
+  document.getElementById('gpInvRoll').checked = !!gpMap.invRoll;
+  document.getElementById('gpInvPitch').checked = !!gpMap.invPitch;
+  document.getElementById('gpInvYaw').checked = !!gpMap.invYaw;
+  document.getElementById('gpInvThr').checked = !!gpMap.invThr;
+  document.getElementById('gpThrMode').value = gpMap.thrMode || 'full';
+  // live axis rows
+  var live = document.getElementById('gpAxisLive');
+  live.innerHTML = '';
+  for(var i=0;i<n;i++){
+    var row=document.createElement('div');
+    row.className='axisRow';
+    row.innerHTML='<span class="axisName">A'+i+'</span><div class="barBg"><div class="barCenter"></div><div class="barFill" id="gpBar'+i+'"></div></div><span class="axisVal" id="gpVal'+i+'">0.00</span>';
+    live.appendChild(row);
+  }
+}
+
+function closeGpCal(){
+  document.getElementById('gpCal').style.display='none';
+}
+
+function readGpMapFromUI(){
+  gpMap.roll = +document.getElementById('gpAxRoll').value;
+  gpMap.pitch = +document.getElementById('gpAxPitch').value;
+  gpMap.yaw = +document.getElementById('gpAxYaw').value;
+  gpMap.throttle = +document.getElementById('gpAxThr').value;
+  gpMap.invRoll = document.getElementById('gpInvRoll').checked;
+  gpMap.invPitch = document.getElementById('gpInvPitch').checked;
+  gpMap.invYaw = document.getElementById('gpInvYaw').checked;
+  gpMap.invThr = document.getElementById('gpInvThr').checked;
+  gpMap.thrMode = document.getElementById('gpThrMode').value;
+  gpMap.calibrated = true;
+}
+
+// Auto-detect: track max deflection per axis while panel open, then assign largest movers
+var gpAutoPeaks = null;
+function startGpAuto(){
+  gpAutoPeaks = [];
+  var gp = gamepadIndex!==null ? navigator.getGamepads()[gamepadIndex] : null;
+  var n = gp && gp.axes ? gp.axes.length : 8;
+  for(var i=0;i<n;i++) gpAutoPeaks.push({i:i, peak:0});
+  document.getElementById('gpPreview').textContent = 'Авто: двигай по очереди КРЕН → ТАНГАЖ → РЫСКАНЬЕ → ГАЗ (по 1.5с на канал)...';
+  var order = ['roll','pitch','yaw','throttle'];
+  var step = 0;
+  var assigned = {};
+  function nextStep(){
+    if(step >= order.length){
+      // assign remaining by peak size
+      document.getElementById('gpPreview').textContent = 'Авто готово — проверь инверсии и сохрани.';
+      openGpCal(); // refresh selects
+      return;
+    }
+    var ch = order[step];
+    // reset peaks for this step
+    for(var i=0;i<gpAutoPeaks.length;i++) gpAutoPeaks[i].peak = 0;
+    document.getElementById('gpPreview').textContent = 'Двигай стик: '+({roll:'КРЕН',pitch:'ТАНГАЖ',yaw:'РЫСКАНЬЕ',throttle:'ГАЗ'})[ch]+'...';
+    setTimeout(function(){
+      var best = -1, bestP = 0.15;
+      for(var i=0;i<gpAutoPeaks.length;i++){
+        if(assigned[gpAutoPeaks[i].i]) continue;
+        if(gpAutoPeaks[i].peak > bestP){ bestP = gpAutoPeaks[i].peak; best = gpAutoPeaks[i].i; }
+      }
+      if(best >= 0){
+        gpMap[ch] = best;
+        assigned[best] = true;
+        var selId = ch==='roll'?'gpAxRoll':ch==='pitch'?'gpAxPitch':ch==='yaw'?'gpAxYaw':'gpAxThr';
+        var sel = document.getElementById(selId);
+        if(sel) sel.value = String(best);
+      }
+      step++;
+      nextStep();
+    }, 1600);
+  }
+  nextStep();
+}
+
+window.addEventListener('gamepadconnected', function(e){
+  gamepadIndex = e.gamepad.index;
+  var toast = document.getElementById('gpToast');
+  if(toast){
+    toast.style.display = 'block';
+    toast.childNodes[0].textContent = '🎮 '+ (e.gamepad.id||'Контроллер') + ' ';
+  }
+  if(!gpMap.calibrated){
+    setTimeout(openGpCal, 400);
+  }
+});
+window.addEventListener('gamepaddisconnected', function(){
+  gamepadIndex = null;
+  var toast = document.getElementById('gpToast');
+  if(toast) toast.style.display = 'none';
+  closeGpCal();
+});
+// Already connected?
+setTimeout(function(){
+  var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for(var i=0;i<pads.length;i++){
+    if(pads[i]){
+      gamepadIndex = pads[i].index;
+      var toast = document.getElementById('gpToast');
+      if(toast){ toast.style.display='block'; toast.childNodes[0].textContent='🎮 '+(pads[i].id||'Контроллер')+' '; }
+      if(!gpMap.calibrated) openGpCal();
+      break;
+    }
+  }
+}, 800);
+
+
+function axisVal(gp, idx, inv){
+  var v = (gp.axes && gp.axes[idx] !== undefined) ? gp.axes[idx] : 0;
+  if(inv) v = -v;
+  return v;
+}
+
+function pollGamepad(){
+  if(gamepadIndex===null) return null;
+  var gp = navigator.getGamepads()[gamepadIndex];
+  if(!gp) return null;
+  var roll = axisVal(gp, gpMap.roll, gpMap.invRoll);
+  var pitch = axisVal(gp, gpMap.pitch, gpMap.invPitch);
+  var yaw = axisVal(gp, gpMap.yaw, gpMap.invYaw);
+  var thrRaw = axisVal(gp, gpMap.throttle, gpMap.invThr);
+  var thr;
+  if(gpMap.thrMode === 'raw01') thr = Math.max(0, Math.min(1, thrRaw));
+  else if(gpMap.thrMode === 'centered') thr = Math.max(0, Math.min(1, (thrRaw + 1) * 0.5));
+  else thr = Math.max(0, Math.min(1, (thrRaw + 1) * 0.5)); // full
+  // deadzone
+  function dz(v, d){ return Math.abs(v) < d ? 0 : v; }
+  return {
+    roll: dz(roll, 0.06),
+    pitch: dz(pitch, 0.06),
+    yaw: dz(yaw, 0.06),
+    throttle: thr
+  };
+}
+
+function updateGpCalUI(){
+  var panel = document.getElementById('gpCal');
+  if(!panel || panel.style.display !== 'block') return;
+  if(gamepadIndex===null) return;
+  var gp = navigator.getGamepads()[gamepadIndex];
+  if(!gp || !gp.axes) return;
+  for(var i=0;i<gp.axes.length;i++){
+    var v = gp.axes[i] || 0;
+    var bar = document.getElementById('gpBar'+i);
+    var lab = document.getElementById('gpVal'+i);
+    if(bar){
+      // map -1..1 to 0..100%
+      var pct = ((v + 1) * 0.5) * 100;
+      bar.style.width = Math.max(2, Math.min(100, pct)) + '%';
+      bar.style.background = Math.abs(v) > 0.15 ? '#0f0' : '#0a6';
+    }
+    if(lab) lab.textContent = v.toFixed(2);
+    if(gpAutoPeaks && gpAutoPeaks[i]){
+      var defl = Math.abs(v);
+      if(defl > gpAutoPeaks[i].peak) gpAutoPeaks[i].peak = defl;
+    }
+  }
+  // preview mapped
+  var m = pollGamepad();
+  if(m){
+    document.getElementById('gpPreview').textContent =
+      'Сейчас → крен:'+m.roll.toFixed(2)+' тангаж:'+m.pitch.toFixed(2)+' рыск:'+m.yaw.toFixed(2)+' газ:'+(m.throttle*100).toFixed(0)+'%';
+  }
+}
+
+
+document.getElementById('btnGfx').onclick=function(){ openGfx(); };
+document.getElementById('gfxClose').onclick=function(){ closeGfx(); };
+document.getElementById('gfxApply').onclick=function(){
+  readGfxUI();
+  if(gfx.preset!=='custom'){ /* keep */ }
+  applyGfxSettings();
+  document.getElementById('gfxDistLab').textContent=(gfx.drawDist/1000).toFixed(1)+' км';
+  document.getElementById('gfxFogLab').textContent=String(gfx.fogMul);
+  closeGfx();
+};
+document.getElementById('gfxPreset').onchange=function(){
+  var v=this.value;
+  if(v!=='custom') setGfxPreset(v);
+  else gfx.preset='custom';
+};
+document.getElementById('gfxDist').oninput=function(){
+  document.getElementById('gfxDistLab').textContent=(+this.value/1000).toFixed(1)+' км';
+  document.getElementById('gfxPreset').value='custom';
+};
+document.getElementById('gfxFog').oninput=function(){
+  document.getElementById('gfxFogLab').textContent=this.value;
+  document.getElementById('gfxPreset').value='custom';
+};
+
+document.getElementById('btnGpCal').onclick = function(){ openGpCal(); };
+document.getElementById('gpToastCal').onclick = function(){ openGpCal(); };
+document.getElementById('gpClose').onclick = function(){ closeGpCal(); };
+document.getElementById('gpSave').onclick = function(){
+  readGpMapFromUI();
+  saveGpMap();
+  document.getElementById('gpPreview').textContent = '✓ Сохранено';
+  setTimeout(closeGpCal, 500);
+};
+document.getElementById('gpAuto').onclick = function(){ startGpAuto(); };
+// live update selects when changed
+['gpAxRoll','gpAxPitch','gpAxYaw','gpAxThr','gpInvRoll','gpInvPitch','gpInvYaw','gpInvThr','gpThrMode'].forEach(function(id){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('change', function(){ readGpMapFromUI(); });
+});
+
+
+
+
+function resetFlight(){
+  spawnOnRunway();
+  state.ammo = AIRCRAFT[state.acIndex].armed ? 999 : 0;
+  for(var i=0;i<bullets.length;i++){ scene.remove(bullets[i].mesh); }
+  bullets.length=0;
+  document.getElementById('crashMsg').style.display='none';
+}
+
+function updatePhysics(dt){
+  if(state.crashed)return;
+  var cfg=AIRCRAFT[state.acIndex];
+  var isHeli=cfg.mode==='heli';
+  var sens=state.sensitivity;
+
+  var pitchIn=state.touchPitch, rollIn=state.touchRoll, yawIn=state.touchYaw;
+  if(state.keys.pitchUp)pitchIn=-1;
+  if(state.keys.pitchDown)pitchIn=1;
+  if(state.keys.rollLeft)rollIn=1;
+  if(state.keys.rollRight)rollIn=-1;
+  if(state.keys.yawLeft)yawIn=1;
+  if(state.keys.yawRight)yawIn=-1;
+
+  var gp=pollGamepad();
+  if(gp){
+    rollIn=-gp.roll; pitchIn=gp.pitch; yawIn=-gp.yaw;
+    if(gp.throttle>0.05)state.thrust=Math.max(0,Math.min(1,gp.throttle));
+  } else if(!isTouch){
+    if(state.keys.throttleUp)state.thrust=Math.min(1,state.thrust+0.5*dt);
+    if(state.keys.throttleDown)state.thrust=Math.max(0,state.thrust-0.6*dt);
+  }
+
+  if(state.keys.flaps&&!isHeli)state.flaps=Math.min(1,state.flaps+0.7*dt);
+  else if(!isHeli)state.flaps=Math.max(0,state.flaps-0.35*dt);
+  if(state.keys.gear&&!state._gearT&&!isHeli){state.gear=!state.gear; state._gearT=true}
+  if(!state.keys.gear)state._gearT=false;
+  if(state.keys.camera&&!state._camT){state.cameraMode=(state.cameraMode+1)%3; state._camT=true}
+  if(!state.keys.camera)state._camT=false;
+
+  var q=state.orientation;
+  var forward=new THREE.Vector3(0,0,-1).applyQuaternion(q);
+  var up=new THREE.Vector3(0,1,0).applyQuaternion(q);
+  var right=new THREE.Vector3(1,0,0).applyQuaternion(q);
+
+  if(isHeli){
+    state.heliTime+=dt;
+    var collective=state.thrust*cfg.maxCollective;
+    var liftDir=up.clone();
+    liftDir.applyAxisAngle(right,pitchIn*0.35*sens);
+    liftDir.applyAxisAngle(forward,-rollIn*0.35*sens);
+    var liftF=liftDir.multiplyScalar(collective);
+    var dragF=state.velocity.clone().multiplyScalar(-cfg.Cd0*80*state.velocity.length());
+    var grav=new THREE.Vector3(0,-cfg.mass*9.81,0);
+    var force=new THREE.Vector3().add(liftF).add(dragF).add(grav);
+    state.velocity.addScaledVector(force.divideScalar(cfg.mass),dt);
+    state.angularVel.y+=yawIn*cfg.maxYaw*sens*1.4*dt;
+    state.angularVel.x+=pitchIn*cfg.maxPitch*sens*1.2*dt;
+    state.angularVel.z+=rollIn*cfg.maxRoll*sens*1.2*dt;
+    state.angularVel.multiplyScalar(0.93);
+    if(aircraftMesh.userData.rotor)aircraftMesh.userData.rotor.rotation.y+=25*dt*(0.3+state.thrust);
+    if(aircraftMesh.userData.tailRotor)aircraftMesh.userData.tailRotor.rotation.x+=40*dt*(0.3+state.thrust);
+  } else {
+    var speed=state.velocity.length();
+    var velLocal=state.velocity.clone().applyQuaternion(q.clone().invert());
+    var alpha=Math.atan2(-velLocal.y,Math.max(0.5,-velLocal.z));
+    var Cl=cfg.Cl0+cfg.ClAlpha*Math.max(-0.3,Math.min(0.3,alpha))+state.flaps*0.5;
+    var Cd=cfg.Cd0+cfg.K*Cl*Cl+state.flaps*0.08+(state.gear?0.03:0);
+    var qDyn=0.5*1.225*speed*speed;
+    var lift=qDyn*cfg.wingArea*Cl;
+    var drag=qDyn*cfg.wingArea*Cd;
+    var liftF=up.clone().multiplyScalar(lift);
+    var dragF=state.velocity.clone().normalize().multiplyScalar(-drag);
+    var thrustF=forward.clone().multiplyScalar(state.thrust*cfg.maxThrust);
+    var grav=new THREE.Vector3(0,-cfg.mass*9.81,0);
+    var force=new THREE.Vector3().add(liftF).add(dragF).add(thrustF).add(grav);
+    state.velocity.addScaledVector(force.divideScalar(cfg.mass),dt);
+    state.angularVel.x+=pitchIn*cfg.maxPitch*sens*1.5*dt;
+    state.angularVel.z+=rollIn*cfg.maxRoll*sens*1.5*dt;
+    state.angularVel.y+=yawIn*cfg.maxYaw*sens*1.5*dt;
+    state.angularVel.multiplyScalar(0.94);
+    if(aircraftMesh.userData.prop)aircraftMesh.userData.prop.rotation.z+=state.thrust*40*dt;
+  }
+
+  var dq=new THREE.Quaternion().setFromEuler(new THREE.Euler(state.angularVel.x*dt,state.angularVel.y*dt,state.angularVel.z*dt,'YXZ'));
+  state.orientation.multiply(dq).normalize();
+
+  // Velocity follows nose (fixes "yaw down but still go up by inertia")
+  if(!isHeli){
+    var spd = state.velocity.length();
+    if(spd > 8){
+      var nose = new THREE.Vector3(0,0,-1).applyQuaternion(state.orientation);
+      // Stronger alignment at higher speed / when thrusting
+      var alignRate = 2.2 + Math.min(4, spd * 0.025) + state.thrust * 1.5;
+      var k = 1 - Math.exp(-alignRate * dt);
+      var target = nose.multiplyScalar(spd);
+      state.velocity.lerp(target, k);
+    }
+  } else {
+    // Heli: milder alignment so it can still slide a bit
+    var spdH = state.velocity.length();
+    if(spdH > 5){
+      var noseH = new THREE.Vector3(0,0,-1).applyQuaternion(state.orientation);
+      var horiz = new THREE.Vector3(state.velocity.x, 0, state.velocity.z);
+      var hSpd = horiz.length();
+      if(hSpd > 3){
+        var kH = 1 - Math.exp(-1.2 * dt);
+        var want = new THREE.Vector3(noseH.x, 0, noseH.z).normalize().multiplyScalar(hSpd);
+        state.velocity.x += (want.x - state.velocity.x) * kH;
+        state.velocity.z += (want.z - state.velocity.z) * kH;
+      }
+    }
+  }
+
+  state.position.addScaledVector(state.velocity,dt);
+  state.distance+=state.position.distanceTo(state.lastPos);
+  state.lastPos.copy(state.position);
+
+  // Ground / runway contact
+  var wheelH = isHeli ? 2.5 : (state.gear ? 3.2 : 1.2);
+  var onGround = state.position.y <= wheelH + 0.15;
+  state.onGround = onGround;
+  if(onGround){
+    state.position.y = wheelH;
+    if(state.velocity.y < 0){
+      var spdKt = state.velocity.length() * 1.94384;
+      var vs = Math.abs(state.velocity.y);
+      if(!state._landScored && spdKt < 80 && Math.abs(state.position.x) < 55 && Math.abs(state.position.z) < 920){
+        state.justLanded = true;
+        state._landScored = true;
+        // Landing rating
+        var score = 100;
+        score -= Math.min(50, spdKt * 0.6);
+        score -= Math.min(40, vs * 8);
+        var euler = new THREE.Euler().setFromQuaternion(state.orientation, 'YXZ');
+        score -= Math.min(30, Math.abs(euler.z) * 40);
+        score = Math.max(0, Math.round(score));
+        var grade = score>=90?'S':score>=75?'A':score>=60?'B':score>=40?'C':'D';
+        var el = document.getElementById('landScore');
+        if(el){
+          el.style.display = 'block';
+          el.innerHTML = 'ПОСАДКА<br><b style="font-size:28px">'+grade+'</b><br>'+score+'/100 · '+Math.round(spdKt)+' kt';
+          setTimeout(function(){ el.style.display='none'; }, 3500);
+        }
+      }
+      state.velocity.y = 0;
+    }
+    // Rolling resistance: light when accelerating, stronger when idle / braking
+    var braking = state.keys.throttleDown || (isTouch && state.thrust < 0.05);
+    var friction;
+    if(braking) friction = Math.pow(0.92, dt * 60);       // brakes
+    else if(state.thrust > 0.1) friction = Math.pow(0.997, dt * 60); // takeoff roll
+    else friction = Math.pow(0.985, dt * 60);             // idle coast
+    state.velocity.x *= friction;
+    state.velocity.z *= friction;
+    // Keep nose mostly level on ground; allow yaw steering
+    if(!isHeli){
+      state.angularVel.x *= 0.5;
+      state.angularVel.z *= 0.4;
+      // Extra ground steering authority
+      if(Math.abs(yawIn) > 0.05 && state.velocity.length() > 1){
+        state.angularVel.y += yawIn * cfg.maxYaw * 1.8 * sens * dt;
+      }
+    }
+  }
+
+
+  // ===== GUNS (fighter) =====
+  if(cfg.armed){
+    state.gunTimer = Math.max(0, state.gunTimer - dt);
+    if(state.fireHeld && state.gunTimer <= 0 && state.ammo > 0 && !state.crashed){
+      state.gunTimer = cfg.gunCooldown || 0.08;
+      state.ammo--;
+      var fwd = new THREE.Vector3(0,0,-1).applyQuaternion(state.orientation);
+      var right = new THREE.Vector3(1,0,0).applyQuaternion(state.orientation);
+      // alternate barrels slightly
+      var side = (state.ammo % 2 === 0) ? 0.6 : -0.6;
+      var origin = state.position.clone()
+        .add(fwd.clone().multiplyScalar(4))
+        .add(right.clone().multiplyScalar(side))
+        .add(new THREE.Vector3(0,-0.3,0).applyQuaternion(state.orientation));
+      var bulletGeo = new THREE.SphereGeometry(0.25, 4, 4);
+      var bulletMat = new THREE.MeshBasicMaterial({color: 0xffee44});
+      var mesh = new THREE.Mesh(bulletGeo, bulletMat);
+      mesh.position.copy(origin);
+      scene.add(mesh);
+      var bvel = fwd.multiplyScalar(cfg.bulletSpeed || 400).add(state.velocity.clone().multiplyScalar(0.3));
+      bullets.push({mesh: mesh, vel: bvel, life: 2.5});
+      // muzzle flash (quick)
+      var flash = new THREE.PointLight(0xffaa33, 2, 25);
+      flash.position.copy(origin);
+      scene.add(flash);
+      setTimeout(function(){ scene.remove(flash); }, 40);
+    }
+  }
+  // update bullets
+  for(var bi = bullets.length - 1; bi >= 0; bi--){
+    var b = bullets[bi];
+    b.mesh.position.addScaledVector(b.vel, dt);
+    b.life -= dt;
+    var hit = false;
+    if(checkCollision(b.mesh.position, {x:1,y:1,z:1})) hit = true;
+    if(b.life <= 0 || b.mesh.position.y < 0 || hit){
+      // small impact spark
+      if(hit){
+        var spark = new THREE.Mesh(
+          new THREE.SphereGeometry(0.8, 4, 4),
+          new THREE.MeshBasicMaterial({color: 0xff6600})
+        );
+        spark.position.copy(b.mesh.position);
+        scene.add(spark);
+        (function(s){ setTimeout(function(){ scene.remove(s); }, 120); })(spark);
+      }
+      scene.remove(b.mesh);
+      if(b.mesh.geometry) b.mesh.geometry.dispose();
+      if(b.mesh.material) b.mesh.material.dispose();
+      bullets.splice(bi, 1);
+    }
+  }
+
+  if(state.spawnGrace > 0) state.spawnGrace -= dt;
+  else if(checkCollision(state.position,cfg.bbox)){
+    state.crashed=true; state.velocity.set(0,0,0); state.angularVel.set(0,0,0);
+    document.getElementById('crashMsg').style.display='block'; unlock('crash');
+  }
+
+  aircraftMesh.position.copy(state.position);
+  aircraftMesh.quaternion.copy(state.orientation);
+
+  // Smooth gear animation 0=up 1=down
+  var gearTarget = state.gear ? 1 : 0;
+  state.gearAnim += (gearTarget - state.gearAnim) * Math.min(1, 3.5 * dt);
+  if(Math.abs(state.gearAnim - gearTarget) < 0.002) state.gearAnim = gearTarget;
+
+  // Animate gear legs
+  var gp = aircraftMesh.userData.gearParts;
+  if(gp && gp.length){
+    var a = state.gearAnim;
+    for(var gi=0; gi<gp.length; gi++){
+      var part = gp[gi];
+      part.group.position.y = part.upY + (part.downY - part.upY) * a;
+      part.group.rotation.z = part.upRotZ + (part.downRotZ - part.upRotZ) * a;
+      part.group.visible = a > 0.05;
+    }
+  }
+  // Animate flaps (rotate down around X)
+  var fl = aircraftMesh.userData.flaps;
+  if(fl && fl.length){
+    var fang = state.flaps * 0.7; // ~40 deg
+    for(var fi=0; fi<fl.length; fi++){
+      fl[fi].rotation.x = fang;
+    }
+  }
+
+  ACHIEVEMENTS.forEach(function(a){if(a.check(state))unlock(a.id)});
+  state.justLanded=false;
+}
+
+
+window.__contrails = [];
+
+// ===== Synthetic audio (engine / wind / stall) =====
+var audioCtx=null, engOsc=null, engGain=null, windGain=null, windSrc=null, stallOsc=null, stallGain=null, audioReady=false;
+function initAudio(){
+  if(audioReady) return;
+  try{
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    // engine: two oscillators
+    engGain = audioCtx.createGain(); engGain.gain.value = 0;
+    engGain.connect(audioCtx.destination);
+    engOsc = audioCtx.createOscillator();
+    engOsc.type = 'sawtooth';
+    engOsc.frequency.value = 60;
+    var engF = audioCtx.createBiquadFilter();
+    engF.type = 'lowpass'; engF.frequency.value = 400;
+    engOsc.connect(engF); engF.connect(engGain);
+    engOsc.start();
+    // wind noise
+    var bufSize = 2*audioCtx.sampleRate;
+    var buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    var data = buf.getChannelData(0);
+    for(var i=0;i<bufSize;i++) data[i] = Math.random()*2-1;
+    windSrc = audioCtx.createBufferSource();
+    windSrc.buffer = buf; windSrc.loop = true;
+    var windF = audioCtx.createBiquadFilter();
+    windF.type = 'bandpass'; windF.frequency.value = 800; windF.Q.value = 0.5;
+    windGain = audioCtx.createGain(); windGain.gain.value = 0;
+    windSrc.connect(windF); windF.connect(windGain); windGain.connect(audioCtx.destination);
+    windSrc.start();
+    // stall horn
+    stallGain = audioCtx.createGain(); stallGain.gain.value = 0;
+    stallGain.connect(audioCtx.destination);
+    stallOsc = audioCtx.createOscillator();
+    stallOsc.type = 'square';
+    stallOsc.frequency.value = 750;
+    stallOsc.connect(stallGain);
+    stallOsc.start();
+    audioReady = true;
+  }catch(e){ console.warn('audio fail', e); }
+}
+function updateAudio(dt){
+  if(!audioReady || !audioCtx) return;
+  if(audioCtx.state === 'suspended') return;
+  var spd = state.velocity.length();
+  var thr = state.thrust;
+  var isHeli = AIRCRAFT[state.acIndex].mode === 'heli';
+  // engine rpm proxy
+  var rpm = isHeli ? (0.3+thr*0.7) : (0.25 + thr*0.75 + Math.min(0.3, spd/200));
+  if(engOsc){
+    engOsc.frequency.setTargetAtTime(isHeli ? (40+rpm*80) : (55+rpm*90), audioCtx.currentTime, 0.05);
+  }
+  if(engGain){
+    var vol = state.crashed ? 0 : (0.02 + rpm * 0.08);
+    engGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.08);
+  }
+  if(windGain){
+    var w = state.crashed ? 0 : Math.min(0.06, spd * 0.00035);
+    windGain.gain.setTargetAtTime(w, audioCtx.currentTime, 0.1);
+  }
+  // stall detect: high alpha / low speed in air
+  var stalling = false;
+  if(!state.onGround && !state.crashed && !isHeli){
+    var q = state.orientation;
+    var velLocal = state.velocity.clone().applyQuaternion(q.clone().invert());
+    var alpha = Math.atan2(-velLocal.y, Math.max(0.5, -velLocal.z));
+    if(spd < 35 && state.position.y > 20) stalling = true;
+    if(Math.abs(alpha) > 0.35 && spd < 70) stalling = true;
+  }
+  state.stalling = stalling;
+  var sw = document.getElementById('stallWarn');
+  if(sw) sw.classList.toggle('show', stalling);
+  if(stallGain){
+    // pulse
+    var pulse = stalling ? (0.04 + 0.04*Math.sin(performance.now()*0.04)) : 0;
+    stallGain.gain.setTargetAtTime(pulse, audioCtx.currentTime, 0.05);
+  }
+}
+
+function updateContrails(dt){
+  var spd = state.velocity.length();
+  var alt = state.position.y;
+  // spawn when high & fast
+  if(gfx.trails && !state.crashed && !state.onGround && alt > 180 && spd > 55){
+    var q = state.orientation;
+    var back = new THREE.Vector3(0,0,1).applyQuaternion(q).multiplyScalar(4);
+    var pos = state.position.clone().add(back);
+    var m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 4, 4),
+      new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.45})
+    );
+    m.position.copy(pos);
+    scene.add(m);
+    window.__contrails.push({mesh:m, life: 2.5 + Math.random()});
+  }
+  var list = window.__contrails;
+  for(var i=list.length-1;i>=0;i--){
+    list[i].life -= dt;
+    list[i].mesh.material.opacity = Math.max(0, list[i].life * 0.18);
+    list[i].mesh.scale.multiplyScalar(1 + 0.4*dt);
+    if(list[i].life <= 0){
+      scene.remove(list[i].mesh);
+      if(list[i].mesh.geometry) list[i].mesh.geometry.dispose();
+      if(list[i].mesh.material) list[i].mesh.material.dispose();
+      list.splice(i,1);
+    }
+  }
+  // drift clouds
+  var clouds = window.__clouds;
+  if(clouds){
+    for(var c=0;c<clouds.length;c++){
+      clouds[c].mesh.position.x += clouds[c].drift * dt;
+      if(clouds[c].mesh.position.x > 10000) clouds[c].mesh.position.x = -10000;
+    }
+  }
+}
+
+function updateCamera(dt){
+  var q=state.orientation;
+  var forward=new THREE.Vector3(0,0,-1).applyQuaternion(q);
+  var isHeli=AIRCRAFT[state.acIndex].mode==='heli';
+  var frame=document.getElementById('cockpitFrame');
+
+  if(state.cameraMode===1){
+    // Cockpit: camera rigidly locked to aircraft orientation
+    frame.style.display='block';
+    var localEye = isHeli ? new THREE.Vector3(0, 0.85, 0.2) : new THREE.Vector3(0, 0.95, 0.35);
+    localEye.applyQuaternion(q);
+    camera.position.copy(state.position).add(localEye);
+    camera.quaternion.copy(q);
+    camera.fov = isTouch ? 78 : 82;
+  } else if(state.cameraMode===0){
+    frame.style.display='none';
+    var dist=isHeli?14:18;
+    var offset=new THREE.Vector3(0,isHeli?4.5:5.5,dist).applyQuaternion(q);
+    camera.position.lerp(state.position.clone().add(offset),1-Math.pow(0.001,dt));
+    camera.lookAt(state.position.clone().add(forward.clone().multiplyScalar(12)));
+    camera.fov=68;
+  } else {
+    frame.style.display='none';
+    camera.position.copy(state.position).add(new THREE.Vector3(0,8,22));
+    camera.lookAt(state.position);
+    camera.fov=68;
+  }
+  camera.updateProjectionMatrix();
+}
+
+
+var mapCanvas=document.getElementById('mapCanvas');
+var mapCtx=mapCanvas ? mapCanvas.getContext('2d') : null;
+var MAP_RANGE=6000; // meters half-size shown
+
+function drawMinimap(){
+  if(!mapCtx || !mapCanvas) return;
+  var w=mapCanvas.width, h=mapCanvas.height;
+  var cx=w/2, cy=h/2;
+  mapCtx.fillStyle='rgba(0,25,10,0.95)';
+  mapCtx.fillRect(0,0,w,h);
+  // grid
+  mapCtx.strokeStyle='rgba(0,80,40,0.5)';
+  mapCtx.lineWidth=1;
+  for(var g=-3;g<=3;g++){
+    var gx=cx+g*(w/6), gy=cy+g*(h/6);
+    mapCtx.beginPath(); mapCtx.moveTo(gx,0); mapCtx.lineTo(gx,h); mapCtx.stroke();
+    mapCtx.beginPath(); mapCtx.moveTo(0,gy); mapCtx.lineTo(w,gy); mapCtx.stroke();
+  }
+  var px=state.position.x, pz=state.position.z;
+  function toMap(x,z){
+    return {
+      mx: cx + (x-px)/MAP_RANGE*(w/2),
+      my: cy + (z-pz)/MAP_RANGE*(h/2)
+    };
+  }
+  // POIs
+  for(var i=0;i<mapPOIs.length;i++){
+    var p=mapPOIs[i];
+    var m=toMap(p.x,p.z);
+    if(m.mx<-10||m.mx>w+10||m.my<-10||m.my>h+10) continue;
+    mapCtx.fillStyle=p.color;
+    mapCtx.beginPath();
+    mapCtx.arc(m.mx, m.my, p.r||3, 0, Math.PI*2);
+    mapCtx.fill();
+    if(p.label){
+      mapCtx.fillStyle='rgba(200,255,200,0.85)';
+      mapCtx.font='9px monospace';
+      mapCtx.fillText(p.label, m.mx+5, m.my+3);
+    }
+  }
+  // player arrow
+  var euler=new THREE.Euler().setFromQuaternion(state.orientation,'YXZ');
+  var hdg=euler.y;
+  mapCtx.save();
+  mapCtx.translate(cx,cy);
+  mapCtx.rotate(hdg);
+  mapCtx.fillStyle='#0f0';
+  mapCtx.beginPath();
+  mapCtx.moveTo(0,-8);
+  mapCtx.lineTo(5,6);
+  mapCtx.lineTo(0,3);
+  mapCtx.lineTo(-5,6);
+  mapCtx.closePath();
+  mapCtx.fill();
+  mapCtx.restore();
+  // border range text
+  mapCtx.fillStyle='rgba(0,200,80,0.7)';
+  mapCtx.font='8px monospace';
+  mapCtx.fillText((MAP_RANGE/1000).toFixed(0)+'km', 4, h-4);
+}
+
+
+
+function updateAirportLights(dt){
+  var list = window.__airportLights;
+  if(!list) return;
+  var tnow = performance.now() * 0.001;
+  for(var i=0;i<list.length;i++){
+    var L = list[i];
+    if(L.kind === 'beacon'){
+      L.mesh.intensity = 0.6 + 0.8 * Math.abs(Math.sin(tnow * 2.5));
+      L.mesh.color.setHex(Math.sin(tnow * 2.5) > 0 ? 0xff2222 : 0xffffff);
+    } else if(L.kind === 'appr'){
+      var on = (Math.floor(tnow * 2 + L.phase * 4) % 2) === 0;
+      L.mesh.visible = on;
+    } else {
+      // edge lights soft pulse
+      var pulse = 0.55 + 0.45 * Math.sin(tnow * 3 + L.phase * 6.28);
+      L.mesh.scale.setScalar(0.7 + pulse * 0.5);
+    }
+  }
+}
+function updateAIPlanes(dt){
+  var list = window.__aiPlanes;
+  if(!list) return;
+  if(!gfx.ai){
+    for(var hi=0;hi<list.length;hi++) list[hi].mesh.visible=false;
+    return;
+  }
+  var px=state.position.x, pz=state.position.z, lim=gfx.drawDist*gfx.drawDist;
+  for(var i=0; i<list.length; i++){
+    var p = list[i];
+    var m = p.mesh;
+    if(p.phase!=='done'){
+      var adx=p.x-px, adz=p.z-pz;
+      m.visible = (adx*adx+adz*adz) < lim;
+    }
+    if(p.phase === 'wait'){
+      p.timer -= dt;
+      if(p.timer <= 0){
+        p.phase = 'taxi';
+        p.speed = 12;
+      }
+    } else if(p.phase === 'taxi'){
+      // taxi to runway entry near z=650, x=0
+      var tx = 0, tz = 680;
+      var dx = tx - p.x, dz = tz - p.z;
+      var dist = Math.hypot(dx, dz);
+      if(dist < 15){
+        p.phase = 'lineup';
+        p.x = 0; p.z = 700;
+        p.hdg = Math.PI; // face -Z
+        p.speed = 0;
+        p.timer = 1.5;
+      } else {
+        p.hdg = Math.atan2(dx, -dz); // toward target, model forward is -Z
+        p.x += Math.sin(p.hdg) * p.speed * dt;
+        p.z -= Math.cos(p.hdg) * p.speed * dt;
+      }
+    } else if(p.phase === 'lineup'){
+      p.timer -= dt;
+      p.hdg = Math.PI;
+      if(p.timer <= 0){
+        p.phase = 'roll';
+        p.speed = 5;
+      }
+    } else if(p.phase === 'roll'){
+      p.hdg = Math.PI;
+      p.speed = Math.min(75, p.speed + 22 * dt);
+      p.z -= p.speed * dt; // move -Z
+      p.x *= 0.98;
+      if(p.speed > 55){
+        p.phase = 'rotate';
+        p.pitch = 0;
+      }
+    } else if(p.phase === 'rotate'){
+      p.hdg = Math.PI;
+      p.speed = Math.min(90, p.speed + 15 * dt);
+      p.pitch = Math.min(0.22, p.pitch + 0.15 * dt);
+      p.z -= p.speed * Math.cos(p.pitch) * dt;
+      p.y += p.speed * Math.sin(p.pitch) * dt;
+      if(p.y > 25){
+        p.phase = 'climb';
+      }
+    } else if(p.phase === 'climb'){
+      p.speed = Math.min(120, p.speed + 8 * dt);
+      p.pitch = Math.min(0.18, p.pitch + 0.02 * dt);
+      // gentle bank away after some height
+      if(p.y > 80) p.hdg += 0.08 * dt;
+      p.x += Math.sin(p.hdg) * p.speed * dt * 0.3;
+      p.z -= Math.cos(p.hdg) * p.speed * Math.cos(p.pitch) * dt;
+      p.y += p.speed * Math.sin(p.pitch) * dt;
+      if(p.y > 450 || Math.hypot(p.x, p.z) > 6000){
+        p.phase = 'done';
+        p.timer = 12 + Math.random() * 20;
+      }
+    } else if(p.phase === 'done'){
+      p.timer -= dt;
+      m.visible = false;
+      if(p.timer <= 0){
+        // respawn at apron
+        m.visible = true;
+        p.x = 160 + (i%3)*40;
+        p.y = 3.2;
+        p.z = 80 + (i%2)*100;
+        p.hdg = Math.PI/2;
+        p.pitch = 0;
+        p.speed = 0;
+        p.phase = 'wait';
+        p.timer = 5 + Math.random() * 15;
+      }
+    }
+    m.position.set(p.x, p.y, p.z);
+    m.rotation.set(p.pitch, p.hdg, 0);
+  }
+}
+
+function updateCars(dt){
+  var list = window.__cityCars;
+  if(!list) return;
+  if(!gfx.cars) return;
+  var px=state.position.x, pz=state.position.z, lim=gfx.drawDist*gfx.drawDist;
+  for(var i=0;i<list.length;i++){
+    var c = list[i];
+    var dx=c.mesh.position.x-px, dz=c.mesh.position.z-pz;
+    if(dx*dx+dz*dz > lim){ c.mesh.visible=false; continue; }
+    c.mesh.visible=true;
+    c.t += c.speed * dt;
+    if(c.t > 1) c.t -= 1;
+    if(c.t < 0) c.t += 1;
+    var x = c.x1 + c.dx * c.t + c.sideX;
+    var z = c.z1 + c.dz * c.t + c.sideZ;
+    c.mesh.position.x = x;
+    c.mesh.position.z = z;
+    // face direction of travel
+    var dir = c.speed >= 0 ? 1 : -1;
+    c.mesh.rotation.y = -Math.atan2(c.dx*dir, c.dz*dir);
+  }
+}
+
+function updateHUD(){
+  var speedKt=state.velocity.length()*1.94384;
+  var altFt=state.position.y*3.28084;
+  var vs=state.velocity.y*196.85;
+  var euler=new THREE.Euler().setFromQuaternion(state.orientation,'YXZ');
+  document.getElementById('ias').textContent=Math.round(speedKt).toString().padStart(3,'0');
+  document.getElementById('alt').textContent=Math.round(altFt).toString().padStart(4,'0');
+  document.getElementById('vs').textContent=(vs>=0?'+':'')+Math.round(vs);
+  document.getElementById('pitch').textContent=THREE.MathUtils.radToDeg(euler.x).toFixed(1);
+  document.getElementById('bank').textContent=THREE.MathUtils.radToDeg(euler.z).toFixed(1);
+  document.getElementById('hdg').textContent=Math.round((THREE.MathUtils.radToDeg(euler.y)+360)%360).toString().padStart(3,'0');
+  document.getElementById('thr').textContent=Math.round(state.thrust*100);
+  document.getElementById('flaps').textContent=(Math.round(state.flaps*10)/10).toFixed(1);
+  if(AIRCRAFT[state.acIndex].armed){
+    document.getElementById('gear').textContent='AMMO '+state.ammo;
+  } else {
+    document.getElementById('gear').textContent=state.gear?'D':'U';
+  }
+  document.getElementById('acName').textContent=AIRCRAFT[state.acIndex].name.split(' ')[0];
+  document.getElementById('sensVal').textContent=state.sensitivity.toFixed(1);
+  var arm = AIRCRAFT[state.acIndex].armed;
+  if(arm){
+    var el = document.getElementById('acInfo');
+    // append ammo hint via thr line is crowded - use gear field area style
+  }
+}
+
+function onResize(){
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+var last=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  var dt=Math.min((now-last)/1000,0.05); last=now;
+  updatePhysics(dt); updateCamera(dt); updateHUD(); drawMinimap(); updateCars(dt); updateAIPlanes(dt); updateAirportLights(dt); updateGpCalUI(); updateContrails(dt); updateAudio(dt);
+  renderer.render(scene,camera);
+}
+
+updateThrOrientation();
+document.getElementById('loading').style.display='none';
+// Start screen gates audio + first frame
+var started=false;
+function beginFlight(){
+  if(started) return;
+  started=true;
+  document.getElementById('startScreen').style.display='none';
+  initAudio();
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+  loop(performance.now());
+}
+document.getElementById('btnStart').onclick=beginFlight;
+// also allow keyboard
+window.addEventListener('keydown', function once(e){
+  if(!started && (e.code==='Enter'||e.code==='Space')){ beginFlight(); }
+}, {once:false});
+})();
+</script>
+</body>
+</html>
